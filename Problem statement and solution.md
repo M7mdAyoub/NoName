@@ -87,13 +87,14 @@ Every project is stored as rows in the same tables. JSON columns hold whatever v
 
 **Tenancy and access**
 - `organization` → `project` (owner organization, plus optional client and donor organizations)
-- `membership`: user, project and role. Access is enforced per project at the database level.
+- `membership`: user, project and role. Access is enforced per project on every query by the back-end.
 
 **The framework**
 - `framework_document`: the uploaded file, its version and its processing status
 - `framework_level`: the project's own level names
 - `result`: the results tree (each row points to its parent)
-- `indicator`: code, name, unit, baseline, target, status (draft / approved) and a `definition` JSON holding the calculation rule
+- `indicator`: code, name, unit, baseline, targets and status (draft / active / retired)
+- `indicator_definition`: the calculation rule as JSON, versioned, with exactly one approved version per indicator
 - `indicator_library`: standard indicators that project indicators can link to
 - `reporting_period`
 
@@ -123,11 +124,13 @@ The platform runs on a self-hosted stack: a responsive front-end, a back-end API
 | Front-end | Responsive web app | Upload frameworks, review AI drafts, render dynamic forms (offline-capable), show the dashboard |
 | Back-end | API server | Orchestrates the AI pipeline, validates AI output, ingests submissions, runs the calculation engine |
 | AI | Qwen (open-weight), served through an OpenAI-compatible API | Framework extraction, form generation, calculation rules, revision comparison, qualitative analysis |
-| Database | PostgreSQL with JSONB (recommended, see Open Decisions) | Stores every project in one generic schema; JSON columns hold forms, submissions and calculation rules; row-level security keeps each organization's data separate |
+| Database | SQLite (WAL mode, built-in JSON functions) | Stores every project in one generic schema in a single file; JSON columns hold forms, submissions and calculation rules; the back-end scopes every query to the caller's project |
+
+The full back-end design is in [BACKEND_IMPLEMENTATION_PLAN.md](BACKEND_IMPLEMENTATION_PLAN.md).
 
 ## Open Decisions
 
-- **Database engine.** PostgreSQL with JSONB is recommended: many organizations and field workers write at the same time, and row-level security keeps their data apart. SQLite was considered, but it allows only one writer at a time and has no row-level security, so it only suits a single-machine demo. Starting point: a local Supabase instance, which can be self-hosted later.
+- **Database growth path.** SQLite runs the platform on a single server. If it later needs several servers or many organizations writing heavily at once, it moves to PostgreSQL; the back-end keeps all SQL in one layer so that move stays cheap.
 - **Where Qwen runs.** Self-hosted (for example with vLLM or Ollama) keeps all data inside the platform. A hosted Qwen API is simpler to start with, but project data would then be sent to a third party.
 
 ## First Milestone
