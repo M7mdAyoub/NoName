@@ -11,7 +11,17 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.errors import install_error_handlers
 from app.api.middleware import RequestContextMiddleware
-from app.api.routers import dashboard, draft, forms, health, jobs, review, upload
+from app.api.routers import (
+    dashboard,
+    demo,
+    draft,
+    forms,
+    health,
+    jobs,
+    qualitative,
+    review,
+    upload,
+)
 from app.config import DEV_ENVS, Settings, get_settings
 from app.db.connection import Database
 from app.logging_setup import configure_logging
@@ -58,6 +68,10 @@ def create_app(settings: Settings | None = None, db: Database | None = None) -> 
     app.include_router(review.router)
     app.include_router(forms.router)
     app.include_router(dashboard.router)
+    app.include_router(qualitative.router)
+    app.include_router(demo.router)
+    if settings.app_env in DEV_ENVS:
+        app.include_router(demo.dev_router)
     api = APIRouter(prefix=API_PREFIX)
     api.include_router(jobs.router)
     if settings.app_env in DEV_ENVS:

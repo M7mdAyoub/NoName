@@ -45,6 +45,10 @@ UNSCOPED_ALLOWLIST: set[tuple[str, str]] = {
     ("GET", "/forms/{key}"),
     ("POST", "/forms/{key}/submissions"),
     ("GET", "/dashboard"),
+    ("GET", "/export.csv"),
+    ("POST", "/qualitative"),
+    ("GET", "/"),  # the demo page
+    ("POST", "/demo/seed"),  # only mounted when APP_ENV is development or test
 }
 # Routes that must leave this list in the named session. The check prints a warning for each.
 TEMPORARY_ALLOWLIST: dict[tuple[str, str], str] = {

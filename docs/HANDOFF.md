@@ -153,3 +153,40 @@ curl http://127.0.0.1:8000/dashboard
 - For a nicer dashboard demo, give a few definitions a `disaggregate_by` (e.g. `sex` on the training and follow-up forms, which already have it) before publishing.
 - Qualitative stretch: text fields with `qualitative: true` (e.g. `notes` on session reports) hold the open text; `pii` fields (`respondent_id`) must be left out. `app/repositories/submissions.by_form` gives all answers per form.
 - New routes still go in `UNSCOPED_ALLOWLIST` in `scripts/check_routes_scoped.py`.
+
+## M4 — Demo polish + stretch (2026-10-24)
+
+### What works
+- **Demo page** at `GET /` (`app/static/index.html`, one file, vanilla JS, no build, light/dark): five tabs that follow the flow. *Upload* (multi-file, polls until `extracted`, shows the extraction counts and problems) → *Review & publish* (results tree; indicators with editable unit/baseline/target; each rule with valid/problems and a JSON editor; open questions with answer boxes; forms with field badges and a JSON editor; Publish with the refusal details) → *Collect* (a form rendered from its schema for every field type; *Seed demo data* button) → *Dashboard* (cards grouped by result: actual, baseline → target, progress bar, ratio numerator/denominator, breakdown bars, not-computable reason; *Export CSV*) → *Themes*. Checked by hand in a browser against a live server: dashboard, review, manual submission and themes all render and work.
+- **Demo script** `scripts/demo.py [--url] [--file ...] [--per-form 30] [--seed 7]`: runs upload → draft → generic reviewer edits (adds a `location` select_one with North/Central/South to every form, adds `disaggregate_by: ["location"]` to every count/sum/average/ratio rule, answers open questions) → publish → N submissions per form through `POST /forms/{key}/submissions` → prints the dashboard table, one breakdown, the themes and the CSV row count. Refuses (exit 1, clear message) if something is already published or the API is not reachable. Live run on a fresh DB with the mock: 2.3 s, all 7 indicators `ok`.
+- **`GET /export.csv`** (`app/services/export.py`): built from `dashboard.get`, so aggregates only (no submission data, no pii). Columns: `result_level, result_code, result_statement, indicator_code, indicator, kind, unit, baseline, target, actual, progress_pct, status, reason, records, dimension, dimension_value`; one row per indicator, plus one per breakdown option (with `dimension`/`dimension_value` filled and `progress_pct` empty).
+- **`POST /qualitative`** `{"form"?, "field"?}` (`app/services/qualitative.py`, step in `app/qualitative/themes.py`): for every published text field with `qualitative: true` and not `pii`, sends the most recent 200 answers (`{id, text}`) to the LLM step `propose_themes`, which returns themes as `{name, description, answers: [ids]}` (≤ 8, checked: ids exist, names unique; retries like every other step). Counts, `share_pct`, `unthemed` and up to 3 verbatim quotes per theme are worked out in code from the stored answers. Response: `{fields: [{form, field, label, answers, analysed, themes: [{name, description, count, share_pct, quotes}], unthemed, error}], llm}`. Computed on request, not stored. 404 if a given form/field matches no qualitative field. An LLM failure is reported per field in `error`.
+- Mock themes (`app/ai/mock.py::propose_themes`): greedy keywords. Words of ≥ 4 letters minus stop words, trailing "s" stripped; take the word most remaining answers share (≥ 2), assign those answers, repeat on the rest, up to 5 themes.
+- **`POST /demo/seed?per_form=30&seed=7`**, only mounted when `APP_ENV` is development/test (like `/api/v1/dev/jobs`), for the page's seed button.
+- **README** rewritten around the demo: setup, reset, the five browser steps, the script, real-model settings, API table.
+
+### How to run
+```
+.venv/Scripts/python scripts/check.py                # 7/7 PASS, 146 passed + 1 skipped (real-LLM test)
+.venv/Scripts/python -m pytest tests/integration/test_m4_demo.py   # M4 tests (5)
+rm -f data/app.db data/app.db-wal data/app.db-shm    # fresh start
+.venv/Scripts/python scripts/dev.py                  # API + page on http://127.0.0.1:8000/
+.venv/Scripts/python scripts/demo.py                 # whole flow in ~3 s, then open the page
+```
+
+### Files added or changed
+- New: `app/static/index.html`, `app/api/routers/{demo,qualitative}.py`, `app/services/{export,qualitative,seed}.py`, `app/qualitative/themes.py`, `scripts/demo.py`, `tests/integration/test_m4_demo.py` (demo script end to end through `TestClient`; CSV with hand-computed values and breakdown rows; themes with hand-computed mock counts, pii exclusion and 404; theme checks; page + seed endpoint).
+- Changed: `app/services/seed.py` now holds the seed logic (moved from `scripts/seed.py`, which is a thin CLI and still exports `seed` for the M3 test); more varied `NOTES` so themes have something to find. `app/ai/mock.py` (themes handler), `app/api/routers/dashboard.py` (`/export.csv`), `app/main.py` (routers), `scripts/check_routes_scoped.py` (allow-list: `/`, `/export.csv`, `/qualitative`, `/demo/seed`), `README.md`.
+- No migration.
+
+### Shortcuts taken
+- The page has no upload of the sample from the server: the user picks `tests/fixtures/sample_logframe.xlsx` from disk. It is one static file served by FastAPI; no framework, no routing, no auth. Form and rule edits are raw JSON textareas.
+- The demo's reviewer edits (`location` question + breakdown) are a scripted stand-in for what a person would do in review; the mock still proposes breakdowns only when it would on its own (sex, when the indicator isn't already filtered on it).
+- Seeded numbers are uniform between the field's min and max (or min + 1000), so actuals are plausible but not tied to baseline/target (e.g. household income ~590 vs target 400).
+- Themes: one LLM call per field, capped at the last 200 answers, no stored runs, no merging across fields, no sentiment. The mock's keyword themes are crude (e.g. "Attendance" and "Attend" as separate themes).
+- `/qualitative` runs the LLM inside the request (no background task); fine with the mock and a local model at demo sizes.
+- The real-model path for themes is untested (no model reachable, same as M2).
+
+### What's next / known gaps
+- The MVP flow in docs/MVP.md is complete. Ideas if there is time: a real model run on the sample (`LLM_MODE=real ...`, then `scripts/demo.py`), a time dimension on the dashboard (`collected_at` is stored but unused), editing rules with a form instead of JSON.
+- To start over in a demo, stop the API and delete `data/app.db*`; nothing can be unpublished.

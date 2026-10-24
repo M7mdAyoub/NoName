@@ -233,11 +233,50 @@ def propose_definition(payload: dict[str, Any]) -> dict[str, Any]:
     return defn
 
 
+# --- propose_themes (qualitative) ----------------------------------------------------------------
+
+_STOP = frozenset({"about", "after", "again", "also", "because", "been", "before", "being",
+                   "both", "could", "from", "have", "into", "just", "many", "more", "most",
+                   "much", "only", "other", "over", "said", "same", "should", "some", "such",
+                   "than", "that", "their", "them", "then", "there", "these", "they", "this",
+                   "those", "very", "want", "were", "what", "when", "where", "which", "while",
+                   "with", "would", "your", "went", "asked"})  # fmt: skip
+MOCK_THEMES = 5
+
+
+def _stem(word: str) -> str:
+    return word[:-1] if len(word) > 4 and word.endswith("s") and not word.endswith("ss") else word
+
+
+def propose_themes(payload: dict[str, Any]) -> dict[str, Any]:
+    """Greedy keyword themes: the word most answers share, then the next among the rest, ..."""
+    words = {
+        a["id"]: {_stem(w) for w in re.findall(r"[a-z]{4,}", a["text"].lower())} - _STOP
+        for a in payload["answers"]
+    }
+    left = set(words)
+    themes: list[dict[str, Any]] = []
+    while left and len(themes) < MOCK_THEMES:
+        freq: dict[str, int] = {}
+        for i in left:
+            for w in words[i]:
+                freq[w] = freq.get(w, 0) + 1
+        best = min(freq.items(), key=lambda kv: (-kv[1], kv[0]), default=None)
+        if best is None or best[1] < 2:
+            break
+        ids = sorted(i for i in left if best[0] in words[i])
+        themes.append({"name": best[0].capitalize(),
+                       "description": f"Answers that mention '{best[0]}'.", "answers": ids})  # fmt: skip
+        left -= set(ids)
+    return {"themes": themes}
+
+
 HANDLERS: dict[str, Callable[[dict[str, Any]], dict[str, Any]]] = {
     "map_layout": map_layout,
     "normalize_indicator": normalize_indicator,
     "propose_forms": propose_forms,
     "propose_definition": propose_definition,
+    "propose_themes": propose_themes,
 }
 
 
