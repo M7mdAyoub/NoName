@@ -108,3 +108,48 @@ curl http://127.0.0.1:8000/draft
 - Statuses: `form.status` and `indicator.status` are `draft|published`, `indicator_definition.status` is `draft|approved`. `draft_repo.clear()` only deletes draft forms; `has_published()` is what blocks re-extraction.
 - Engine input: the definition JSON above, plus `submission.data` (JSON keyed by field id) and `submission.entity_key`. Ratios default to `scale: 100`; milestone = 1 if any matching record, else 0.
 - New routes go in `UNSCOPED_ALLOWLIST` in `scripts/check_routes_scoped.py`.
+
+## M3 — Review, publish, collect, calculate, dashboard (2026-10-24)
+
+### What works
+- **Review edits** (all return the edited item as `GET /draft` shows it; 404 if unknown, 422 with `error.details` if invalid):
+  - `PATCH /draft/results/{id}` — `level_name`, `code`, `statement`.
+  - `PATCH /draft/indicators/{id}` — `result_id`, `code`, `name`, `unit`, `kind`, `baseline`, `target`, `frequency`, `data_source`. Only the keys sent are changed; `null` clears.
+  - `PATCH /draft/forms/{key}` — `{"title"?, "schema"?}` (`schema` is the whole new form schema). Must pass `validate_form`. **409 once the form is published** (submissions depend on it). The key can't change.
+  - `PUT /draft/definitions/{indicator_id}` — `{"definition": {...}}`, creates or replaces. It only has to parse to be saved as a draft; its remaining problems show as `errors`/`valid` in the response and in `GET /draft`. Once the indicator is published it must be fully valid (else 422). It also sets `indicator.kind` to the definition's kind.
+  - `PATCH /draft/open_questions/{id}` — `{"answer": "..."|null}`.
+- `POST /publish` — 422 with a list of `{form|indicator_id, errors}` while any form or definition has problems; 409 if there is no draft. Otherwise forms and indicators → `published`, definitions → `approved`. Returns counts, `without_definition` (published anyway, shown as not computable) and `unanswered_questions` (they don't block).
+- **Collect**: `GET /forms` (key, title, status, submission count), `GET /forms/{key}` (schema + status), `POST /forms/{key}/submissions` with `{"data": {field_id: answer}, "collected_at"?: ISO date/datetime}` → 201. 409 if the form isn't published, 422 with one message per problem otherwise. `validate_submission` (in `app/schemas/form.py`) checks unknown fields, required, types (text string; integer/decimal JSON numbers, no strings; select values; select_multiple a list; date `YYYY-MM-DD`) and min/max. Empty answers are dropped; the `entity_key_field` answer is copied into `submission.entity_key`.
+- **Engine** (`app/engine/calc.py`, pure, no I/O): `calculate(definition, forms, records)` → `Outcome(status ok|not_computable, value, reason, records, components)` + one breakdown per `disaggregate_by` field (one entry per option). Rules are in the module docstring; the main ones: missing answers match only `is_empty`; count/entity = distinct non-empty entity keys; sum of nothing is 0; average of nothing, a zero denominator, an invalid definition or a missing definition are `not_computable` with a reason. Everything is cumulative over all submissions, computed on each request.
+- `GET /dashboard` — `{published, results, indicators: [...], submissions: {form_key: n}}`. Each indicator: `indicator_id, code, name, result{id,level_name,code,statement}, kind, unit, frequency, data_source, baseline, target, actual, progress_pct, status, reason, records, components (ratio numerator/denominator), breakdowns[{dimension, label, values[{value,label,actual,status,reason,records}]}]`. Only published indicators are listed. `progress_pct` = (actual − baseline) / (target − baseline) × 100 (baseline NULL → 0; NULL if target is missing or equals baseline). Counts and milestones come back as ints.
+- **Seed**: `scripts/seed.py [--per-form 30] [--seed 7]` adds random but valid submissions (through the same `submit` service) to every published form of `DATABASE_PATH`. Entity keys come from a pool of 80% of the count, so distinct counts are lower than record counts. Checked on a scratch DB: 50 per form → all 7 sample indicators `ok`.
+
+### How to run
+```
+.venv/Scripts/python scripts/check.py                # 7/7 PASS, 141 passed + 1 skipped (real-LLM test)
+.venv/Scripts/python -m pytest tests/engine tests/integration/test_m3_flow.py   # M3 tests (17)
+.venv/Scripts/python scripts/dev.py                  # API on :8000
+curl -F "files=@tests/fixtures/sample_logframe.xlsx" http://127.0.0.1:8000/upload
+curl http://127.0.0.1:8000/draft
+curl -X POST http://127.0.0.1:8000/publish
+.venv/Scripts/python scripts/seed.py --per-form 50   # or POST /forms/{key}/submissions
+curl http://127.0.0.1:8000/dashboard
+```
+
+### Files added or changed
+- New: `app/engine/calc.py`, `app/repositories/submissions.py`, `app/services/{review,submissions,dashboard}.py`, `app/api/routers/{review,forms,dashboard}.py`, `scripts/seed.py`, `tests/engine/test_calc.py` (engine against hand-computed values for all five kinds, breakdowns, conditions, not-computable cases, submission validation), `tests/integration/test_m3_flow.py` (upload → edits → refused publish → publish → submit → dashboard numbers; seed → every indicator computes).
+- Changed: `app/schemas/form.py` (`validate_submission`), `app/repositories/draft.py` (update/upsert/publish SQL), `app/main.py` (routers), `scripts/check_routes_scoped.py` (allow-list). No new migration: the 0002 tables were enough.
+
+### Shortcuts taken
+- No time dimension: actuals are cumulative over all submissions; `collected_at` is stored but not used. No caching; the dashboard recomputes every indicator on each call (fine at demo sizes).
+- Breakdown buckets are the options of the field in the first form the definition reads; records without that answer are in the total but in no bucket.
+- After publish nothing can be unpublished, forms are frozen, and re-extraction stays blocked (as in M2). To start over, delete the database file.
+- The mock's definitions have empty `disaggregate_by`, so breakdowns only appear after a reviewer adds one with `PUT /draft/definitions/...` (the e2e test adds a `sex` field to the household survey and breaks the average income down by it). Worth doing in the demo data for M4.
+- Submissions can't be edited or deleted; no list endpoint for them (only counts in `GET /forms`).
+- Error `details` for submissions and form edits are plain strings; for publish they are objects.
+
+### What M4 needs to know
+- The whole demo flow is API-only today: upload → `GET /draft` → edits → `POST /publish` → `scripts/seed.py` → `GET /dashboard`. A demo script can call these in order; the e2e test `test_review_publish_collect_and_dashboard` is a working example of every call.
+- For a nicer dashboard demo, give a few definitions a `disaggregate_by` (e.g. `sex` on the training and follow-up forms, which already have it) before publishing.
+- Qualitative stretch: text fields with `qualitative: true` (e.g. `notes` on session reports) hold the open text; `pii` fields (`respondent_id`) must be left out. `app/repositories/submissions.by_form` gives all answers per form.
+- New routes still go in `UNSCOPED_ALLOWLIST` in `scripts/check_routes_scoped.py`.

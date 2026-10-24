@@ -6,7 +6,9 @@ Stored in `form.schema`. The AI proposes it, a person edits it, M3 validates sub
 from __future__ import annotations
 
 import re
-from typing import Literal
+from collections.abc import Mapping
+from datetime import date
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -88,3 +90,61 @@ def validate_form(form: FormSchema) -> list[str]:
         elif key.type not in ("text", "integer"):
             errors.append("entity_key_field must be a text or integer field")
     return errors
+
+
+def _is_number(value: Any) -> bool:
+    return isinstance(value, int | float) and not isinstance(value, bool)
+
+
+def _check_answer(f: FormField, value: Any) -> str | None:
+    """Why `value` is not a valid answer to `f`, or None if it is."""
+    allowed = {o.value for o in f.options}
+    if f.type == "text":
+        return None if isinstance(value, str) else "must be a string"
+    if f.type in NUMERIC_TYPES:
+        if not _is_number(value):
+            return "must be a number"
+        if f.type == "integer" and not float(value).is_integer():
+            return "must be a whole number"
+        if f.constraints and f.constraints.min is not None and value < f.constraints.min:
+            return f"must be at least {f.constraints.min:g}"
+        if f.constraints and f.constraints.max is not None and value > f.constraints.max:
+            return f"must be at most {f.constraints.max:g}"
+        return None
+    if f.type == "select_one":
+        if not isinstance(value, str) or value not in allowed:
+            return f"must be one of {sorted(allowed)}"
+        return None
+    if f.type == "select_multiple":
+        if not isinstance(value, list) or not all(isinstance(v, str) for v in value):
+            return "must be a list of option values"
+        if bad := [v for v in value if v not in allowed]:
+            return f"{bad} not among the options {sorted(allowed)}"
+        if len(set(value)) != len(value):
+            return "has duplicate values"
+        return None
+    try:  # date
+        date.fromisoformat(value)
+    except (TypeError, ValueError):
+        return "must be a date (YYYY-MM-DD)"
+    return None
+
+
+def validate_submission(
+    form: FormSchema, data: Mapping[str, Any]
+) -> tuple[dict[str, Any], list[str]]:
+    """Check answers against the form. Returns the cleaned answers (empty ones dropped, integers
+    as int) and the problems; the submission may only be stored when there are none."""
+    errors = [f"'{k}': not a field of the form" for k in data if form.field(k) is None]
+    clean: dict[str, Any] = {}
+    for f in form.fields:
+        value = data.get(f.id)
+        if value is None or value == "" or value == []:
+            if f.required:
+                errors.append(f"'{f.id}': required")
+            continue
+        if problem := _check_answer(f, value):
+            errors.append(f"'{f.id}': {problem}")
+            continue
+        clean[f.id] = int(value) if f.type == "integer" else value
+    return clean, errors

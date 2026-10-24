@@ -123,3 +123,91 @@ def read(conn: Connection) -> dict[str, list[dict[str, Any]]]:
             "SELECT id, indicator_id, question, answer FROM open_question ORDER BY created_at, id"
         ),
     }
+
+
+# -- review edits (M3) ----------------------------------------------------------------------
+
+RESULT_FIELDS = ("level_name", "code", "statement")
+INDICATOR_FIELDS = ("result_id", "code", "name", "unit", "kind", "baseline", "target", "frequency",
+                    "data_source")  # fmt: skip
+
+
+def _update(conn: Connection, table: str, columns: tuple[str, ...], row_id: str,
+            changes: dict[str, Any]) -> bool:  # fmt: skip
+    """UPDATE only the given columns; the names come from the fixed tuples above, never from input."""
+    sets = [c for c in columns if c in changes]
+    assignments = ", ".join(f"{c} = :{c}" for c in sets) or "id = id"  # no changes: existence check
+    sql = f"UPDATE {table} SET {assignments} WHERE id = :id"  # noqa: S608
+    return conn.execute(text(sql), {**{c: changes[c] for c in sets}, "id": row_id}).rowcount > 0
+
+
+def update_result(conn: Connection, result_id: str, changes: dict[str, Any]) -> bool:
+    return _update(conn, "result", RESULT_FIELDS, result_id, changes)
+
+
+def update_indicator(conn: Connection, indicator_id: str, changes: dict[str, Any]) -> bool:
+    return _update(conn, "indicator", INDICATOR_FIELDS, indicator_id, changes)
+
+
+def get_form(conn: Connection, key: str) -> dict[str, Any] | None:
+    row = (
+        conn.execute(
+            text("SELECT id, key, title, schema, status FROM form WHERE key = :key"), {"key": key}
+        )
+        .mappings()
+        .first()
+    )
+    if row is None:
+        return None
+    form = dict(row)
+    form["schema"] = json.loads(form["schema"])
+    return form
+
+
+def update_form(conn: Connection, key: str, title: str, schema: dict[str, Any], now: str) -> None:
+    conn.execute(
+        text(
+            "UPDATE form SET title = :title, schema = :schema, updated_at = :now WHERE key = :key"
+        ),
+        {"key": key, "title": title, "schema": json.dumps(schema), "now": now},
+    )
+
+
+def indicator_exists(conn: Connection, indicator_id: str) -> bool:
+    row = conn.execute(text("SELECT 1 FROM indicator WHERE id = :id"), {"id": indicator_id}).first()
+    return row is not None
+
+
+def upsert_definition(conn: Connection, def_id: str, indicator_id: str,
+                      definition: dict[str, Any], status: str, now: str) -> None:  # fmt: skip
+    conn.execute(
+        text(
+            "INSERT INTO indicator_definition (id, indicator_id, definition, status, created_at,"
+            " updated_at) VALUES (:id, :indicator_id, :definition, :status, :now, :now)"
+            " ON CONFLICT (indicator_id) DO UPDATE SET definition = excluded.definition,"
+            " status = excluded.status, updated_at = excluded.updated_at"
+        ),
+        {
+            "id": def_id,
+            "indicator_id": indicator_id,
+            "definition": json.dumps(definition),
+            "status": status,
+            "now": now,
+        },  # fmt: skip
+    )
+
+
+def answer_question(conn: Connection, question_id: str, answer: str | None) -> bool:
+    result = conn.execute(
+        text("UPDATE open_question SET answer = :answer WHERE id = :id"),
+        {"id": question_id, "answer": answer},
+    )
+    return result.rowcount > 0
+
+
+def publish(conn: Connection, now: str) -> None:
+    conn.execute(text("UPDATE form SET status = 'published', updated_at = :now"
+                      " WHERE status = 'draft'"), {"now": now})  # fmt: skip
+    conn.execute(text("UPDATE indicator SET status = 'published' WHERE status = 'draft'"))
+    conn.execute(text("UPDATE indicator_definition SET status = 'approved', updated_at = :now"
+                      " WHERE status = 'draft'"), {"now": now})  # fmt: skip

@@ -35,6 +35,16 @@ UNSCOPED_ALLOWLIST: set[tuple[str, str]] = {
     ("GET", "/upload/{upload_id}"),
     ("POST", "/upload/{upload_id}/extract"),
     ("GET", "/draft"),
+    ("PATCH", "/draft/results/{result_id}"),
+    ("PATCH", "/draft/indicators/{indicator_id}"),
+    ("PATCH", "/draft/forms/{key}"),
+    ("PUT", "/draft/definitions/{indicator_id}"),
+    ("PATCH", "/draft/open_questions/{question_id}"),
+    ("POST", "/publish"),
+    ("GET", "/forms"),
+    ("GET", "/forms/{key}"),
+    ("POST", "/forms/{key}/submissions"),
+    ("GET", "/dashboard"),
 }
 # Routes that must leave this list in the named session. The check prints a warning for each.
 TEMPORARY_ALLOWLIST: dict[tuple[str, str], str] = {
