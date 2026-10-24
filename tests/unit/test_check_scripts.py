@@ -18,7 +18,7 @@ def test_hard_delete_scan_flags_non_exempt_tables_only(tmp_path: Path) -> None:
     root = tmp_path / "app"
     root.mkdir()
     (root / "bad.py").write_text(
-        'SQL = "DELETE FROM submission WHERE id = 1"\n'
+        'SQL = "DELETE FROM audit_log WHERE id = 1"\n'
         'OK = "delete from job where id = 1"\n'
         'OK2 = "DELETE FROM membership_component WHERE x = 1"\n'
         "from sqlalchemy import delete\n"
@@ -30,7 +30,7 @@ def test_hard_delete_scan_flags_non_exempt_tables_only(tmp_path: Path) -> None:
     finally:
         check_no_hard_delete.ROOT = monkey_root
     assert len(problems) == 2
-    assert "hard DELETE on submission" in problems[0]
+    assert "hard DELETE on audit_log" in problems[0]
     assert "SQLAlchemy delete()" in problems[1]
 
 

@@ -11,17 +11,26 @@ from app.db import migrate, protection
 from app.db.connection import Database
 
 REAL = migrate.MIGRATIONS_DIR
+NL = chr(10)
 
 
 @pytest.fixture
 def mig_dir(tmp_path: Path) -> Path:
+    """A copy of the foundation migration only (0001 + its lock line), so these tests can add
+    their own `0002_*` files whatever later migrations exist in the real directory."""
     target = tmp_path / "migrations"
-    shutil.copytree(REAL, target)
+    target.mkdir()
+    shutil.copy(REAL / "0001_foundation.sql", target)
+    lock = (REAL / "checksums.lock").read_text(encoding="utf-8").splitlines()
+    kept = [line for line in lock if line.startswith("#") or line.startswith("0001 ")]
+    (target / "checksums.lock").write_text(NL.join(kept) + NL, encoding="utf-8")
     return target
 
 
 def test_migrate_applies_once_and_is_idempotent(empty_db: Database) -> None:
-    assert migrate.migrate(empty_db) == ["0001_foundation.sql"]
+    every = [m.filename for m in migrate.discover()]
+    assert every[0] == "0001_foundation.sql"
+    assert migrate.migrate(empty_db) == every
     assert migrate.migrate(empty_db) == []
     with empty_db.read_tx() as conn:
         ledger = migrate.read_ledger(conn)
@@ -181,4 +190,4 @@ def test_two_runners_starting_together_apply_once(tmp_path: Path) -> None:
     for t in threads:
         t.join()
     assert not errors
-    assert sorted(len(r) for r in results) == [0] * 7 + [1]
+    assert sorted(len(r) for r in results) == [0] * 7 + [len(migrate.discover())]

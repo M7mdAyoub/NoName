@@ -2,3 +2,6 @@
 *.sql text eol=lf
 *.lock text eol=lf
 *.py text eol=lf
+*.pdf binary
+*.xlsx binary
+*.docx binary

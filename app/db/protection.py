@@ -27,6 +27,15 @@ EXEMPT: frozenset[str] = frozenset(
         "password_reset",
         "entity_alias",
         "job",
+        # MVP tables (docs/MVP.md cuts soft delete): drafts are edited and replaced in place
+        "project",
+        "framework_upload",
+        "result",
+        "indicator",
+        "form",
+        "indicator_definition",
+        "submission",
+        "open_question",
     }
 )
 HISTORY: frozenset[str] = frozenset({"submission_revision", "ai_run", "calc_run"})

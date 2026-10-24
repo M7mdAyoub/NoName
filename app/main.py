@@ -11,7 +11,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.errors import install_error_handlers
 from app.api.middleware import RequestContextMiddleware
-from app.api.routers import health, jobs
+from app.api.routers import health, jobs, upload
 from app.config import DEV_ENVS, Settings, get_settings
 from app.db.connection import Database
 from app.logging_setup import configure_logging
@@ -53,6 +53,7 @@ def create_app(settings: Settings | None = None, db: Database | None = None) -> 
     app.add_middleware(RequestContextMiddleware)  # outermost: sees every request, sets the id
 
     app.include_router(health.router)
+    app.include_router(upload.router)  # MVP routes sit at the root, as docs/MVP.md lists them
     api = APIRouter(prefix=API_PREFIX)
     api.include_router(jobs.router)
     if settings.app_env in DEV_ENVS:

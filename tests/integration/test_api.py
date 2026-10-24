@@ -52,7 +52,7 @@ def test_readyz_is_503_when_migrations_are_pending(settings: Settings, empty_db:
     with TestClient(create_app(settings, empty_db)) as test_client:
         response = test_client.get("/readyz")
     assert response.status_code == 503
-    assert response.json()["checks"]["migrations"] == "pending: [1]"
+    assert response.json()["checks"]["migrations"].startswith("pending: [1, 2")
 
 
 def test_request_id_is_generated_echoed_and_sanitised(client: TestClient) -> None:

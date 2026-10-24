@@ -1,0 +1,8 @@
+Level;Code;Result statement;Indicator;Unit;Baseline;Target;Means of verification;Frequency
+Impact;0;Household incomes in the valley increased;Average monthly household income;JOD;310;400;Household survey;Annual
+Outcome;1;Women's participation in agri-food production increased;Number of women completing agri-food training;people;0;400;Training attendance records;Quarterly
+Outcome;1;Women's participation in agri-food production increased;% of trained women applying new practices;%;0;60;Follow-up survey;Semiannual
+Output;1.1;Training courses delivered;Number of training sessions held;sessions;0;80;Session reports;Quarterly
+Output;1.2;Start-up kits distributed;Number of start-up kits distributed;kits;0;250;Distribution lists;Quarterly
+Outcome;2;Market access for small producers improved;Total sales through cooperative markets;JOD;12000;50000;Market sales records;Quarterly
+Output;2.1;Cooperative market platform launched;Market platform operational;milestone;No;Yes;Project reports;Once

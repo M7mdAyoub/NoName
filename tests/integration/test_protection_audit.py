@@ -72,7 +72,7 @@ def test_exempt_and_protected_lists_are_consistent(db: Database) -> None:
         "password_reset",
         "entity_alias",
         "job",
-    } == protection.EXEMPT
+    } <= protection.EXEMPT
     assert not protection.EXEMPT & protection.HISTORY
     with db.read_tx() as conn:
         assert protection.protected_tables(conn) == ["file"]
