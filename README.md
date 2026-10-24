@@ -13,8 +13,8 @@ vLLM). A built-in mock model means everything runs without one.
 Requires Python 3.12 or newer.
 
 ```bash
-git clone https://github.com/M7mdAyoub/NoName.git
-cd NoName
+git clone https://github.com/M7mdAyoub/Qiyas.git
+cd Qiyas
 python -m venv .venv
 ```
 Activate the environment (Windows: `.venv\Scripts\activate`, macOS/Linux:
