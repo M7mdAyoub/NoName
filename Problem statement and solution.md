@@ -1,6 +1,6 @@
-# AI-Powered M&E Platform
+# AI-Powered M&E Platform 
 
-From a static Results Framework to a live tracking system: KPIs, field surveys and dashboards, generated and connected automatically.
+From a static Results Framework to a live tracking system: KPIs, field surveys and dashboards, generated and connected automatically ( YES ) .
 
 ## Problem Statement
 
