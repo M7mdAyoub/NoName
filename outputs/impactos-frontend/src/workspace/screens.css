@@ -1,0 +1,85 @@
+/* Framework, Review and Collect screens. Same opaque, high-contrast palette as workspace.css; logical
+   properties only, so the layout follows the document direction (RTL). Nothing under 13px. */
+
+/* Badges and actions side by side, wrapping on narrow screens. */
+.q-scr-badges{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.q-scr-row-actions{display:flex;align-items:center;gap:10px;flex-wrap:wrap;justify-content:flex-end}
+
+/* Plain links inside running text, still a comfortable touch target. */
+.q-scr-text-link{color:#8c3e1d;font-weight:500;text-decoration:underline;text-underline-offset:4px;display:inline-flex;align-items:center;min-height:44px}
+.q-scr-text-link:hover{color:#6e2f14}
+
+/* Which forms a rule reads / which indicators a form feeds. */
+.q-scr-uses{margin-top:14px;font-size:15px;line-height:1.9;color:var(--q-muted)}
+.q-scr-uses>ul{list-style:none;padding:0;margin:4px 0 0;display:flex;flex-wrap:wrap;gap:0 18px}
+.q-scr-uses>ul>li{color:var(--q-text);min-width:0;overflow-wrap:anywhere}
+.q-scr-missing{color:#963b20;display:inline-flex;align-items:center;min-height:44px}
+
+/* Disclosure summaries on these screens (extraction notes, reading notes, session uploads, rule details,
+   form questions): a full 44px touch target instead of the shorter default ones. */
+.q-processing-card details>summary,.q-scr-history>summary,.q-review-row details>summary{min-height:44px;padding-block:7px}
+
+/* Server error details and extraction problems. */
+.q-scr-details{margin:10px 0 0;padding-inline-start:22px;line-height:1.9}
+.q-scr-details>li{margin:4px 0;overflow-wrap:anywhere}
+
+/* Framework: work in progress, test mode notice and extraction summary. */
+.q-scr-working{display:flex;align-items:flex-start;gap:10px;font-size:15px;line-height:1.9;color:#33475b;background:#eef1f5;border:1px solid #c9d1db;border-radius:7px;padding:14px 16px;margin-bottom:18px}
+.q-scr-working>svg{flex-shrink:0;margin-top:4px}
+.q-scr-spin{animation:q-scr-spin 1.1s linear infinite}
+@keyframes q-scr-spin{to{transform:rotate(360deg)}}
+.q-scr-mock{display:flex;align-items:flex-start;gap:12px;margin-top:0}
+.q-scr-mock>svg{flex-shrink:0;margin-top:4px}
+.q-scr-mock p{margin-top:6px}
+.q-scr-summary{border:1px solid var(--q-line);border-radius:7px;padding:20px;margin-bottom:16px;background:var(--q-white)}
+.q-scr-summary-head{display:flex;align-items:baseline;justify-content:space-between;gap:8px 16px;flex-wrap:wrap}
+.q-scr-summary-head h3{font-size:19px}
+.q-scr-summary-head p{font-size:14px;color:var(--q-muted)}
+.q-scr-stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:16px;margin:18px 0 0}
+.q-scr-stats>div,.q-scr-forms-split dl>div{border:1px solid var(--q-line);border-radius:6px;padding:12px 14px;background:#faf6ef;min-width:0}
+.q-scr-stats dt,.q-scr-forms-split dt{font-size:14px;color:var(--q-muted);line-height:1.6}
+.q-scr-stats dd,.q-scr-forms-split dd{margin:4px 0 0;font-size:24px;font-weight:500;color:var(--q-text);line-height:1.4}
+.q-scr-notes{margin:14px 0 0;padding-inline-start:22px;font-size:14px;line-height:1.9;color:#80531d}
+.q-scr-forms-split{margin-top:18px;border-top:1px solid var(--q-line);padding-top:16px}
+.q-scr-forms-split h4{font-size:17px;display:flex;align-items:center;gap:10px}
+.q-scr-forms-split h4>span{font-size:14px;color:var(--q-muted);font-weight:400;border:1px solid var(--q-line);border-radius:5px;padding:2px 9px}
+.q-scr-forms-split dl{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;margin:12px 0 4px}
+.q-scr-summary .q-technical{margin-bottom:0}
+
+/* Review: publish summary, publish list, question sections. */
+.q-scr-result{align-items:flex-start;margin-top:0}
+.q-scr-result>div{flex:1;min-width:0}
+.q-scr-result strong{font-weight:500;display:block}
+.q-scr-result p{margin-top:4px}
+.q-scr-result ul{margin:6px 0 0;padding-inline-start:22px}
+.q-scr-result li{overflow-wrap:anywhere}
+.q-scr-result>.q-icon-btn{flex-shrink:0;margin-block:-8px;margin-inline-end:-8px}
+.q-scr-publish-list{margin:-12px 0 20px;padding-inline-start:22px;font-size:16px;line-height:1.9}
+.q-scr-publish-list:empty{display:none}
+.q-form-questions>.q-scr-question-section{font-size:17px;font-weight:500;color:var(--q-text);margin:22px 0 4px;padding-bottom:6px;border-bottom:1px solid var(--q-line)}
+
+/* Collect: what a form card feeds, and sections in the fill / preview dialog. */
+.q-scr-feeds{margin-top:12px;font-size:14px;line-height:1.9;color:var(--q-muted)}
+.q-scr-feeds>ul{list-style:none;padding:0;margin:6px 0 0;display:flex;flex-wrap:wrap;gap:6px}
+.q-scr-feeds>ul>li{font-size:14px;line-height:1.6;color:var(--q-text);background:#f4f0e9;border:1px solid #d4cec4;border-radius:5px;padding:4px 9px;max-width:100%;overflow-wrap:anywhere}
+.q-scr-feeds>ul>li.q-scr-more{color:var(--q-muted);background:transparent}
+.q-scr-none{display:block}
+.q-form-card-top>.q-scr-badges{justify-content:flex-end}
+.q-live-form-title>.q-scr-badges+h3{margin-top:15px}
+.q-scr-form-section{border-top:1px solid var(--q-line);padding-top:20px;margin-top:28px}
+.q-scr-form-section:first-child{border-top:0;padding-top:0;margin-top:0}
+.q-scr-form-section>h4{font-size:20px;line-height:1.6;color:var(--q-text)}
+.q-scr-form-section>.q-answer-field:first-of-type{margin-top:14px}
+
+@media(max-width:760px){
+ .q-scr-stats{grid-template-columns:repeat(2,minmax(0,1fr))}
+}
+@media(max-width:560px){
+ .q-review-row-top:has(>.q-scr-row-actions),.q-review-row-top:has(>.q-scr-badges){flex-wrap:wrap}
+ .q-scr-row-actions{width:100%;justify-content:stretch}
+ .q-scr-row-actions>.q-btn{flex:1}
+ .q-review-row-top>.q-btn.q-compact[href]{white-space:normal}
+ .q-scr-summary{padding:16px}
+ .q-scr-stats,.q-scr-forms-split dl{gap:10px}
+ .q-scr-stats dd,.q-scr-forms-split dd{font-size:22px}
+}

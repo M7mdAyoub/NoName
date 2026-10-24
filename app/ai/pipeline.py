@@ -297,16 +297,17 @@ def to_document_form(
         label = _NUMBERING.sub("", q.label).strip() or q.label.strip()
         values: set[str] = set()
         labels = dict.fromkeys(o.strip() for o in q.options if o.strip())
-        field_ = FormField(id=unique_slug(label, ids), type=q.type, label=label,
+        field_ = FormField(id=unique_slug(label, ids, fallback="q"), type=q.type, label=label,
                            required=q.required, pii=q.pii,
-                           options=[Option(value=unique_slug(o, values), label=o) for o in labels],
+                           options=[Option(value=unique_slug(o, values, fallback="opt"), label=o)
+                                    for o in labels],
                            qualitative=q.qualitative and q.type == "text",
                            section=q.section)  # fmt: skip
         if entity is None and q.label == out.entity_key and q.type in ("text", "integer"):
             entity, field_.required = field_.id, True
         fields.append(field_)
     title = out.title.strip() or cand.title.replace("_", " ").strip()
-    return steps.DocumentForm(key=unique_slug(cand.title, keys, 30), title=title,
+    return steps.DocumentForm(key=unique_slug(cand.title, keys, 30, fallback="form"), title=title,
                               data_source=cand.title, indicators=[], entity_key_field=entity,
                               fields=fields, source=cand.source,
                               cut_name=cand.cut_name)  # fmt: skip

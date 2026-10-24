@@ -40,6 +40,9 @@ def test_build_edit_and_delete_forms(client: TestClient) -> None:
     again = client.post("/draft/forms", json={"title": "Site visit checklist"}).json()
     assert again["key"] == "site_visit_checklist_2"
     assert client.post("/draft/forms", json={"title": " "}).status_code == 422
+    arabic = [client.post("/draft/forms", json={"title": t}).json()["key"]
+              for t in ("زيارة ميدانية", "سجل الحضور")]  # fmt: skip
+    assert arabic == ["form", "form_2"]  # no Latin letters to make a key from
 
     schema = {**form["schema"], "origin": "document", "source": "made up", "fields": [
         {"id": "visited_on", "type": "date", "label": "Visit date", "required": True},

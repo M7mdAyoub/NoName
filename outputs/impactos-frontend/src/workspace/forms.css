@@ -1,0 +1,129 @@
+/* Form builder (#/forms): forms list | editor | live preview. Same palette and controls as workspace.css;
+   logical properties only, so the layout mirrors correctly in RTL. */
+.q-builder{display:grid;grid-template-columns:minmax(0,1fr);gap:20px;align-items:start}
+.q-builder-empty-actions{display:flex;flex-wrap:wrap;justify-content:center;gap:10px}
+
+/* Forms list */
+.q-builder-list-head{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:18px 18px 4px}
+.q-builder-list-head h2{font-size:19px}
+.q-builder-search{display:flex;padding:0 12px 10px}
+.q-builder-search>.q-search{max-width:none}
+/* The padding leaves room for the 3px focus ring (offset 4px), which the scrolling list would otherwise clip. */
+.q-builder-list ul{list-style:none;margin:0;padding:8px 10px 12px;display:flex;flex-direction:column;gap:8px;max-height:340px;overflow:auto}
+.q-builder-item{display:flex;flex-direction:column;align-items:stretch;gap:8px;width:100%;min-height:44px;padding:12px 13px;text-align:start;background:none;border:1px solid transparent;border-inline-start:4px solid transparent;border-radius:7px;transition:background .15s,border-color .15s}
+.q-builder-item:hover{background:#f6efe5;border-color:#e8d9c7}
+.q-builder-item[aria-current=true]{background:#f6e9dc;border-color:#ead2bb;border-inline-start-color:var(--q-orange)}
+.q-builder-item strong{font-size:15px;font-weight:500;line-height:1.7;overflow-wrap:anywhere}
+.q-builder-item-tags{display:flex;flex-wrap:wrap;align-items:center;gap:6px}
+.q-builder-item small{font-size:13px;line-height:1.7;color:var(--q-muted)}
+.q-builder-item[aria-current=true] strong{color:#843c1e}
+
+/* Editor */
+.q-builder-editor{overflow:visible}
+.q-builder-head{padding:22px 24px 18px;border-bottom:1px solid var(--q-line)}
+.q-builder-head h2{font-size:22px;overflow-wrap:anywhere}
+.q-builder-meta{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-top:10px;font-size:13px;color:var(--q-muted)}
+.q-builder-meta bdi,.q-builder-id bdi,.q-builder-values bdi,.q-builder-ro-meta bdi{font-family:Consolas,monospace;font-size:14px;overflow-wrap:anywhere}
+.q-builder-head .q-field-hint bdi{overflow-wrap:anywhere}
+.q-builder-feeds{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin-top:12px;font-size:14px;color:var(--q-muted)}
+.q-builder-body{padding:2px 24px 24px}
+.q-builder-body>.q-field-label{margin-top:20px}
+.q-builder-section-title{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:28px;padding-top:22px;border-top:1px solid var(--q-line)}
+.q-builder-section-title h3{font-size:19px;display:flex;align-items:center}
+.q-builder-card{border:1px solid var(--q-line);border-radius:8px;background:#fffaf2;padding:14px 18px 18px;margin-top:14px;scroll-margin:80px}
+.q-builder-card:focus{outline:3px solid #a3421b;outline-offset:3px}
+.q-builder-card-invalid{border-color:#e6bfae}
+.q-builder-card-top{display:flex;flex-wrap:wrap;align-items:center;gap:8px}
+.q-builder-card-top h3{font-size:16px;font-weight:600}
+.q-builder-tools{display:flex;gap:2px;margin-inline-start:auto}
+.q-builder-card .q-field-label{margin:14px 0 0}
+.q-builder-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:0 14px}
+.q-builder-grid-numbers{grid-template-columns:repeat(auto-fit,minmax(120px,1fr))}
+.q-builder-checks{display:flex;flex-wrap:wrap;gap:0 22px;margin-top:6px}
+.q-builder-checks .q-check-line{margin-top:6px}
+.q-builder-note{display:flex;align-items:flex-start;gap:7px}
+.q-builder-note>svg{margin-top:6px;color:#4c6b45}
+.q-builder-values{margin-top:6px;font-size:14px;color:var(--q-muted)}
+.q-builder-values summary{cursor:pointer;padding:10px 0;min-height:44px}
+.q-builder-values ul{list-style:none;margin:0;padding:0;border:1px solid var(--q-line);border-radius:6px;background:var(--q-white)}
+.q-builder-values li{display:flex;justify-content:space-between;gap:12px;padding:8px 12px;border-bottom:1px solid #e6dfd5;color:var(--q-text)}
+.q-builder-values li:last-child{border-bottom:0}
+.q-builder-values p{margin-top:8px;line-height:1.9}
+.q-builder-id{margin-top:14px;padding-top:12px;border-top:1px dashed #d4cabd;font-size:14px;line-height:1.9}
+.q-builder-id>.q-field-label{margin-top:0}
+.q-builder-fixed{color:var(--q-muted)}
+.q-builder-issues>.q-field-error{margin-top:6px}
+.q-builder-add{margin-top:16px}
+.q-builder-body .q-callout ul{margin:8px 0 0;padding-inline-start:20px}
+.q-builder-body .q-callout li{margin:4px 0}
+.q-builder-server{margin-top:8px;font-size:14px}
+.q-builder-server summary{cursor:pointer;padding:6px 0;min-height:44px}
+.q-builder-problem ul{margin:8px 0 0;padding-inline-start:20px}
+.q-builder-problem li{margin:4px 0;overflow-wrap:anywhere}
+.q-icon-btn.q-builder-danger{color:#963b20}
+.q-icon-btn.q-builder-danger:hover{background:#fbede7;color:#7d2f17}
+.q-btn.q-builder-delete{color:#963b20;border-color:#e0b7a5}
+.q-btn.q-builder-delete:hover{background:#fbede7;border-color:#c98f78}
+.q-btn.q-primary.q-builder-confirm-delete{background:#963b20;border-color:#963b20}
+.q-btn.q-primary.q-builder-confirm-delete:hover{background:#7d2f17;border-color:#7d2f17}
+
+/* Save bar: stays in view at the bottom of the editor while the questions scroll */
+.q-builder-actions{position:sticky;inset-block-end:0;z-index:3;display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:12px;padding:14px 24px;background:var(--q-white);border-top:1px solid var(--q-line);border-end-start-radius:9px;border-end-end-radius:9px;box-shadow:0 -8px 20px #202a320d}
+.q-builder-state{font-size:14px;line-height:1.8;color:var(--q-muted)}
+.q-builder-state-error{color:#a33e1d}
+.q-builder-state .q-inline-link{background:none;border:0;padding:0;min-height:44px}
+.q-builder-buttons{display:flex;flex-wrap:wrap;gap:8px;margin-inline-start:auto}
+/* Room below a focused control for the save bar (up to about 112px when its text and buttons take two rows,
+   about 163px at <=560px) and the focus ring, so the bar never hides the field with keyboard focus. */
+.q-builder-body :is(input,select,textarea,button,summary),.q-builder-card{scroll-margin-block-end:124px}
+
+/* Published: questions shown read-only */
+.q-builder-locked{display:flex;align-items:flex-start;gap:11px}
+.q-builder-locked>svg{margin-top:5px}
+.q-builder-locked p{margin-top:4px}
+.q-builder-locked .q-btn{margin-top:12px}
+.q-builder-readonly{list-style:none;margin:14px 0 0;padding:0}
+.q-builder-readonly>li{border:1px solid var(--q-line);border-radius:8px;padding:14px 18px 16px;margin-top:12px;background:#fffaf2}
+.q-builder-ro-label{font-size:16px;line-height:1.8;margin-top:8px}
+.q-builder-ro-meta{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px 18px;margin:12px 0 0}
+.q-builder-ro-meta dt{font-size:13px;color:var(--q-muted)}
+.q-builder-ro-meta dd{margin:2px 0 0;font-size:15px;line-height:1.8;overflow-wrap:anywhere}
+
+/* Live preview */
+.q-builder-preview-head{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:10px;padding:16px 20px;background:#f5f0e8;border-bottom:1px solid var(--q-line)}
+.q-builder-preview-head h2{display:flex;align-items:center;gap:8px;font-size:19px}
+.q-builder-preview-head h2>svg{color:#8f6d48}
+.q-builder-preview-badge{font-size:13px;line-height:1.6;padding:4px 10px;border:1px dashed #b99062;border-radius:5px;background:#fbf3e7;color:#77522f}
+.q-builder-preview-body{padding:4px 20px 22px}
+.q-builder-preview-title{border-bottom:1px solid var(--q-line);padding:18px 0 16px}
+.q-builder-preview-title h3{font-size:22px;line-height:1.6;overflow-wrap:anywhere}
+.q-builder-preview-title p{font-size:14px;line-height:1.9;color:var(--q-muted);margin-top:6px}
+.q-builder-preview-section>h4{font-size:17px;font-weight:600;line-height:1.7;margin-top:24px;padding-bottom:8px;border-bottom:2px solid #ead2bb;color:#843c1e}
+.q-builder-preview .q-answer-field{margin:20px 0}
+.q-builder-preview .q-answer-field>p.q-field-label{margin-top:0}
+.q-builder-preview .q-answer-field>.q-field-hint{margin-top:8px}
+.q-builder-preview-foot{border-top:1px solid var(--q-line);padding-top:16px;margin-top:8px}
+
+@media(min-width:1200px){
+ .q-builder{grid-template-columns:230px minmax(0,1fr) minmax(0,.85fr);gap:16px}
+ .q-builder-list ul{max-height:none;overflow:visible}
+ .q-builder-preview{position:sticky;inset-block-start:16px;max-height:calc(100vh - 32px);overflow:auto}
+ .q-builder-head,.q-builder-body{padding-inline:20px}
+ .q-builder-actions{padding-inline:20px}
+}
+@media(min-width:1550px){
+ .q-builder{grid-template-columns:270px minmax(0,1.1fr) minmax(0,.9fr);gap:22px}
+ .q-builder-head,.q-builder-body,.q-builder-actions{padding-inline:24px}
+}
+@media(max-width:560px){
+ .q-builder-head{padding:20px 18px 16px}
+ .q-builder-body{padding:2px 16px 20px}
+ .q-builder-card{padding:12px 14px 16px}
+ .q-builder-actions{padding:12px 16px}
+ .q-builder-buttons{width:100%}
+ .q-builder-buttons>.q-btn{flex:1 1 auto}
+ .q-builder-buttons>.q-primary{flex-basis:100%;order:-1}
+ .q-builder-body :is(input,select,textarea,button,summary),.q-builder-card{scroll-margin-block-end:180px}
+ .q-builder-preview-body{padding:4px 16px 20px}
+ .q-builder-tools{margin-inline-start:0;width:100%;justify-content:flex-end}
+}

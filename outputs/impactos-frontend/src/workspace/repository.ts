@@ -1,4 +1,4 @@
-export const repository={name:'M7mdAyoub/Qiyas',url:'https://github.com/M7mdAyoub/Qiyas',commit:'b342a953a165fe1c8ba504c6cc3ff345c61c035a'};
+export const repository={name:'M7mdAyoub/Qiyas',url:'https://github.com/M7mdAyoub/Qiyas',commit:'main'};
 export const sourceFile=(path:string)=>`${repository.url}/blob/${repository.commit}/${path}`;
 export const documents=[
  {title:'نطاق النسخة الحالية',description:'مسار العمل الأساسي، نموذج البيانات، وحدود النسخة الأولى.',path:'docs/MVP.md',tag:'نطاق العمل'},

@@ -4,7 +4,7 @@ import type {FormSchema} from '../workspace/types';
 describe('real-data-only workspace',()=>{
  it('starts without invented projects, indicators, responses, or quotes',()=>{
   expect(emptyDraft()).toEqual({results:[],indicators:[],forms:[],definitions:[],open_questions:[]});
-  expect(emptyDashboard()).toEqual({published:false,results:[],indicators:[],submissions:{}});
+  expect(emptyDashboard()).toEqual({published:false,results:[],summary:{total:0,achieved:0,in_progress:0,not_started:0,no_target:0,not_computable:0},indicators:[],submissions:{}});
  });
  it('distinguishes unavailable values from an actual zero',()=>{
   expect(metric(null)).toBe('—');expect(metric(undefined)).toBe('—');expect(metric(0)).toBe('٠');expect(metric(50,'%')).toBe('٥٠٪');

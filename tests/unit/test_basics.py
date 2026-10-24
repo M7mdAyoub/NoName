@@ -33,10 +33,14 @@ def test_env_example_loads_in_development() -> None:
     settings = Settings(_env_file=ROOT / ".env.example")  # type: ignore[call-arg]
     assert settings.app_env == "development"
     assert settings.secret_key == "change-me"
-    assert settings.cors_origin_list == ["http://localhost:5173"]
+    assert settings.cors_origin_list == ["http://localhost:5173", "http://127.0.0.1:5173"]
+    assert settings.frontend_dist == Path("outputs/impactos-frontend/dist")
     assert settings.llm_max_concurrency == 4
     assert settings.llm_is_external is False
     assert not settings.llm_configured or settings.llm_model_extract
+    assert settings.llm_use_mock  # a fresh copy runs without a model...
+    assert settings.llm_model_extract == "qwen3.5"  # ...and is ready for scripts/serve_vllm.sh
+    assert settings.llm_extra_body == {"chat_template_kwargs": {"enable_thinking": False}}
 
 
 def test_placeholder_secrets_refused_outside_development() -> None:

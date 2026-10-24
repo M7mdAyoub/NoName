@@ -1,0 +1,94 @@
+/* KPI tracking on the overview: summary tiles, feeding-form chips, progress bars and the indicator detail.
+   Same opaque palette as workspace.css and shared.css; logical properties only, so RTL needs no overrides. */
+
+/* Summary tiles: one per tracking status, each one filters the table. */
+.q-kpi-tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;padding:22px 24px 4px}
+.q-kpi-tile{display:flex;flex-direction:column;align-items:flex-start;gap:4px;min-height:96px;min-width:0;padding:14px 16px;border:1px solid var(--q-line);border-radius:8px;background:var(--q-white);color:var(--q-text);text-align:start;transition:background .15s,border-color .15s}
+.q-kpi-tile:hover{border-color:#b8936b;background:#fbf6ef}
+.q-kpi-tile[aria-pressed=true]{border-color:var(--q-orange);box-shadow:inset 0 0 0 1px var(--q-orange);background:#fbf1e6}
+.q-kpi-tile-label{display:flex;align-items:center;gap:8px;font-size:14px;line-height:1.6;color:#48535b}
+.q-kpi-tile[aria-pressed=true] .q-kpi-tile-label{color:#913e1b;font-weight:500}
+.q-kpi-tile-label>i{width:10px;height:10px;border-radius:50%;flex-shrink:0;background:#8f7658}
+.q-kpi-tile-achieved .q-kpi-tile-label>i{background:#31583b}
+.q-kpi-tile-in_progress .q-kpi-tile-label>i{background:#33475b}
+.q-kpi-tile-not_started .q-kpi-tile-label>i{background:#80531d}
+.q-kpi-tile-no_target .q-kpi-tile-label>i{background:#56616a}
+.q-kpi-tile-not_computable .q-kpi-tile-label>i{background:#963b20}
+.q-kpi-tile>strong{font-size:28px;line-height:1.4;font-weight:500}
+.q-kpi-tile>small{font-size:13px;line-height:1.6;color:var(--q-muted)}
+.q-kpi-shown{padding:0 24px 12px;font-size:14px;color:var(--q-muted)}
+
+/* Indicators table. */
+.q-kpi-table td{vertical-align:top}
+.q-kpi-table .q-table-link{min-height:44px}
+.q-kpi-level{display:block;font-size:13px;line-height:1.7;color:var(--q-muted);margin-top:4px;max-width:260px}
+.q-kpi-none{font-size:14px;color:var(--q-muted);white-space:nowrap}
+.q-kpi-status{display:inline-flex}
+
+/* A form that feeds an indicator: opens it on the collection screen. */
+.q-kpi-forms{display:flex;flex-direction:column;align-items:flex-start;gap:8px;min-width:200px}
+.q-kpi-chip{display:inline-flex;align-items:center;flex-wrap:wrap;gap:4px 7px;min-height:44px;max-width:260px;padding:8px 12px;border:1px solid #ddd2c3;border-radius:7px;background:#f7f1e8;color:#8c3e1d;font-size:14px;line-height:1.5;text-align:start}
+.q-kpi-chip>span[dir]{overflow-wrap:anywhere;font-weight:500}
+.q-kpi-chip:hover{border-color:#b8936b;background:#f3e9dc}
+.q-kpi-chip:hover>span[dir]{text-decoration:underline;text-underline-offset:4px}
+.q-kpi-chip-count{color:#56616a;white-space:nowrap}
+
+/* Progress bar: clamped to 0–100 % of the way from baseline to target; the number beside it is the real value. */
+.q-kpi-progress{display:flex;align-items:center;gap:10px;min-width:150px}
+.q-kpi-progress-empty{color:var(--q-muted)}
+.q-kpi-bar{flex:0 0 88px;height:10px;border-radius:5px;border:1px solid #d4cec4;background:#f4f0e9;overflow:hidden}
+.q-kpi-bar>i{display:block;height:100%;max-inline-size:100%;border-radius:4px;background:#56616a}
+.q-kpi-progress-achieved .q-kpi-bar{background:#edf3ec;border-color:#c6d7c3}
+.q-kpi-progress-achieved .q-kpi-bar>i{background:#31583b}
+.q-kpi-progress-in_progress .q-kpi-bar{background:#eef1f5;border-color:#c9d1db}
+.q-kpi-progress-in_progress .q-kpi-bar>i{background:#33475b}
+.q-kpi-progress-not_started .q-kpi-bar{background:#fbf0dd;border-color:#dec9a7}
+.q-kpi-progress-not_started .q-kpi-bar>i{background:#80531d}
+.q-kpi-pct{font-size:15px;font-weight:500;font-variant-numeric:tabular-nums;white-space:nowrap}
+
+/* Indicator detail dialog. */
+.q-kpi-code{display:block;font-size:14px;color:var(--q-muted);margin-top:4px}
+.q-kpi-muted{font-size:14px;line-height:1.9;color:var(--q-muted)}
+.q-kpi-detail-progress{display:grid;gap:8px;margin:22px 0 0;padding:16px 18px;border:1px solid var(--q-line);border-radius:8px;background:#fbf8f3}
+.q-kpi-detail-progress>span{font-size:14px;color:var(--q-muted)}
+.q-kpi-detail-progress .q-kpi-bar{flex:0 1 260px;height:12px;border-radius:6px}
+.q-kpi-detail-progress .q-kpi-pct{font-size:20px}
+.q-kpi-ratio{margin:0 0 22px;padding:16px 18px;border:1px solid var(--q-line);border-radius:8px}
+.q-kpi-ratio>span{display:block;font-size:14px;color:var(--q-muted)}
+.q-kpi-ratio>p{font-size:20px;line-height:1.7;margin-top:4px}
+.q-kpi-ratio strong{font-weight:600;font-variant-numeric:tabular-nums}
+.q-kpi-ratio>small{display:block;font-size:13px;line-height:1.7;color:var(--q-muted);margin-top:4px}
+.q-kpi-detail-forms{margin-top:24px;border-top:1px solid var(--q-line);padding-top:20px}
+.q-kpi-detail-forms h3{font-size:20px;margin-bottom:12px}
+.q-kpi-detail-forms ul{list-style:none;margin:0;padding:0;display:grid;gap:10px}
+.q-kpi-detail-forms li{display:flex;flex-wrap:wrap;align-items:center;gap:8px 10px}
+.q-kpi-detail-forms .q-kpi-chip{max-width:100%}
+.q-kpi-key{font-family:Consolas,monospace;font-size:13px;color:var(--q-muted)}
+.q-breakdown strong>small{font-size:13px;font-weight:400}
+
+/* Qualitative results: the mock-mode notice and the empty-filter action. */
+.q-kpi-mock{display:flex;align-items:flex-start;gap:12px}
+.q-kpi-mock>svg{margin-top:4px}
+.q-kpi-mock p{margin-top:4px}
+.q-analysis>.q-kpi-muted{margin-top:14px}
+.q-analysis-field>.q-kpi-muted{margin-top:12px}
+.q-inline-empty>.q-btn{margin-top:12px}
+
+@media(max-width:560px){
+ .q-kpi-tiles{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;padding:19px 19px 4px}
+ .q-kpi-tile{min-height:88px;padding:12px 13px}
+ .q-kpi-tile-all{grid-column:1/-1}
+ .q-kpi-tile>strong{font-size:26px}
+ .q-kpi-shown{padding-inline:19px}
+ .q-kpi-detail-progress .q-kpi-bar{flex:1 1 auto}
+}
+@media(forced-colors:active){
+ .q-kpi-tile[aria-pressed=true]{outline:3px solid Highlight;outline-offset:-3px}
+ .q-kpi-bar{border-color:CanvasText}
+ .q-kpi-bar>i,.q-kpi-tile-label>i{forced-color-adjust:none;background:CanvasText!important}
+}
+@media print{
+ .q-kpi-chip{border-color:#999}
+}
+/* Disclosures inside dialogs (indicator detail: the server's reason, the calculation components) are touch targets too. */
+.q-dialog .q-technical>summary{min-height:44px;padding-block:10px;box-sizing:border-box}

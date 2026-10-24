@@ -16,12 +16,14 @@ from app.db.migrate import migrate  # noqa: E402
 
 @pytest.fixture
 def settings(tmp_path: Path) -> Settings:
-    return Settings(
+    return Settings(  # type: ignore[call-arg]
+        _env_file=None,  # hermetic: a developer's .env (CORS, LLM mode ...) must not change tests
         app_env="test",
         database_path=tmp_path / "app.db",
         files_path=tmp_path / "files",
         backup_path=tmp_path / "backups",
         job_poll_seconds=0.05,
+        frontend_dist=tmp_path / "frontend",  # not built: tests never see a local npm build
     )
 
 

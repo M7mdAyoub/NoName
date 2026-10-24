@@ -101,7 +101,7 @@ def create_form(db: Database, title: str, schema: dict[str, Any] | None) -> str:
         {**schema, "title": title.strip(), "origin": schema.get("origin") or "manual"}
     )
     with db.write_tx() as conn:
-        key = unique_slug(form.title, repo.form_keys(conn), 30)
+        key = unique_slug(form.title, repo.form_keys(conn), 30, fallback="form")
         repo.insert_form(conn, new_id(), key, form.title, form.model_dump(mode="json"), utc_now())
     return key
 

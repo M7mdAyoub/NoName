@@ -50,7 +50,8 @@ UNSCOPED_ALLOWLIST: set[tuple[str, str]] = {
     ("GET", "/dashboard"),
     ("GET", "/export.csv"),
     ("POST", "/qualitative"),
-    ("GET", "/"),  # the demo page
+    ("GET", "/"),  # redirects to the frontend at /app/ (a static mount), or the demo page
+    ("GET", "/classic"),  # the English demo page
     ("POST", "/demo/seed"),  # only mounted when APP_ENV is development or test
 }
 # Routes that must leave this list in the named session. The check prints a warning for each.

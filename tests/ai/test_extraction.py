@@ -154,8 +154,9 @@ def test_openai_compatible_client_sends_a_json_schema_request() -> None:
                      "body": json.loads(request.content)})  # fmt: skip
         return httpx.Response(200, json={"choices": [{"message": {"content": json.dumps(answer)}}]})
 
+    extra = {"chat_template_kwargs": {"enable_thinking": False}, "model": "not-this-one"}
     settings = Settings(app_env="test", llm_base_url="http://llm.local/v1/",
-                        llm_model_extract="qwen", llm_api_key="k")  # fmt: skip
+                        llm_model_extract="qwen", llm_api_key="k", llm_extra_body=extra)  # fmt: skip
     llm = OpenAICompatibleLLM(settings, transport=httpx.MockTransport(handler))
     out = llm.run("map_layout", "instr", {"rows": ROWS}, TableLayout, check_layout(ROWS))
     llm.close()
@@ -165,6 +166,8 @@ def test_openai_compatible_client_sends_a_json_schema_request() -> None:
     assert seen[0]["auth"] == "Bearer k"
     assert body["model"] == "qwen" and body["temperature"] == 0
     assert body["response_format"]["json_schema"]["schema"]["title"] == "TableLayout"
+    assert body["chat_template_kwargs"] == {"enable_thinking": False}  # LLM_EXTRA_BODY is sent...
+    assert body["model"] == "qwen"  # ...but cannot replace the fields the client sets
 
 
 @pytest.mark.skipif(not os.environ.get("LLM_BASE_URL"), reason="set LLM_BASE_URL to test a model")

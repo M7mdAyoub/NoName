@@ -77,4 +77,5 @@ def create_app(settings: Settings | None = None, db: Database | None = None) -> 
     if settings.app_env in DEV_ENVS:
         api.include_router(jobs.dev_router)
     app.include_router(api)
+    app.mount(demo.FRONTEND_PATH, demo.frontend_files(settings), name="frontend")
     return app

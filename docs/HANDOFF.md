@@ -220,3 +220,42 @@ Upload `tests/fixtures/sample_logframe_with_forms.xlsx` on the page, then open t
 - The mock's form reading is heuristic (question in one column, options in the next, short leading tags, upper-case or "Section" rows as sections); a real model is expected to do better. Real-model import is untested, like the rest of the real-LLM path.
 - Rules are still edited as JSON; the builder covers forms only.
 - `track` has no time dimension: "in progress" means some progress, not "on schedule".
+
+## M5 — Integration with the Arabic frontend (outputs/impactos-frontend) (2026-10-24)
+
+### What works
+- **One app, one origin.** The FastAPI server serves the built frontend at **`/app/`** (`FRONTEND_DIST`, default `outputs/impactos-frontend/dist`; build with `npm install && npm run build` there). `GET /` redirects to `/app/` once it is built, otherwise it shows the English demo page, which stays at **`/classic`**. The folder is checked per request (no restart after a build). Only a real build folder is served: it must contain `index.html` and may not be the repository or a folder containing it, and an empty `FRONTEND_DIST` turns serving off (it used to mean "the repository root"). Windows-invalid names under `/app/` answer 404 instead of 500.
+- **The frontend connects by itself** to the server that served it (or the Vite dev server's own origin, which proxies the API paths to `VITE_API_TARGET`, default `http://127.0.0.1:8000`). The connection dialog is still there for another server; a failed automatic attempt is quiet. CORS also allows `http://127.0.0.1:5173` now.
+- **Pre-existing frontend bug fixed:** `WorkspaceApi` stored `fetch` as a method and called `this.transport(...)`; browsers throw "Illegal invocation", so the original frontend could never reach a server (its tests always injected a fake transport). A test now reproduces the browser behaviour.
+- **New in the frontend** (`src/workspace/`):
+  - `Forms.tsx` + `builder.ts` (route `#/forms`, "منشئ النماذج"): the form builder with live preview — forms list with origin badge (من ملفاتك / مقترح آلياً / أُنشئ يدوياً), status and how many indicators each feeds; editor for draft forms (title, identifier question, per question: label, type, required, personal data, open text for themes, options one per line, min/max/unit, section, id; move/delete/add); client validation mirroring `validate_form`; save/discard/delete; published forms read-only with "copy to a new form"; unsaved-changes guards (dialog when switching forms, prompt when leaving the page or reconnecting). Arabic labels get ids `q_1…` and option values `opt_1…`; saved ids never change, ids and option values read by rules are never reused for something else, and the builder warns when an edit breaks a rule.
+  - `Overview.tsx`: KPI tracking — summary tiles per track (click to filter), a table with the forms feeding each KPI (link to Collect), baseline/target/actual, progress bar and status; detail dialog with progress, forms, ratio parts and breakdowns; CSV export with track and forms.
+  - `Framework.tsx`: shows mock-mode extractions with an honest notice (they used to be refused, so nothing worked without a model) and an extraction summary (forms from your files vs proposed); `Review.tsx`: origin badges, forms per rule/indicator, "إزالة القاعدة" for draft rules, re-publish when something new is a draft, error details by name; `Collect.tsx`: section headings, KPIs each form feeds, `#/collect?form=key` opens a form.
+  - Shared: `api.ts` (createForm/saveForm/deleteForm/deleteDefinition, `uploadStatus` with `?ir=false`, 204 handling), `Context.tsx` (auto-connect; `run(work, message, {inline})` so a screen that shows its own error keeps the top banner quiet; `setUnsaved`/`confirmLeave`), `model.ts` (track/origin/field-type labels, `detailText` for server error details, `formsInDefinition`, `hashParam`, `sectionGroups`), `UI.tsx` (`OriginBadge`, `ServerError`), `types.ts` (current contract), `shared.css`/`forms.css`/`kpi.css`/`screens.css`. Pages remount when the hash route changes (`#/forms?form=x`, `#/collect?form=x`).
+- Backend: `slugify`/`unique_slug` take a fallback, so Arabic titles give form keys `form`, `form_2` and imported Arabic questions/options `q…`/`opt…` (was `f`, `f_2`). `scripts/dev.py --frontend` also runs the Vite dev server (installs packages on first run). Tests are hermetic (`_env_file=None`, frontend folder in a tmp dir).
+
+### Verified
+- Backend: `python scripts/check.py` 7/7 PASS (168 passed, 1 skipped). Frontend: `npx tsc --noEmit`, `npm run build`, `npx vitest run` (see the commit for the final count).
+- In a browser against a running server on a fresh database: auto-connect at `/app/`; upload + extract of `sample_logframe_with_forms.xlsx` through the real file input (mock notice, 2 forms from the file + 5 proposed); the builder adds an Arabic choose-one question and saves it (`q_1`, `opt_1..3`); publish; four submissions through the Collect dialog with section headings; dashboard ratio 2/3 women = 66.7 % → achieved (hand-checked); 375px without horizontal overflow; no console errors.
+- A five-lens review (contract, React state, UX/RTL, backend, builder logic) found 22 issues; skeptics confirmed 14, all fixed (incl. the empty-`FRONTEND_DIST` exposure, option values being silently reused by a rule, the identifier question moving while typing an id, min/max inputs rewriting 0.05).
+
+### How to run
+```
+cd outputs/impactos-frontend && npm install && npm run build && cd ../..
+python scripts/dev.py                 # http://127.0.0.1:8000/ -> /app/
+python scripts/dev.py --frontend      # + hot-reload dev server on http://127.0.0.1:5173/
+cd outputs/impactos-frontend && npm test
+```
+
+### Shortcuts and limits
+- `dist/` is not committed: the frontend must be built once after cloning (README says how).
+- The frontend's Arabic number agreement ("١ أسئلة") follows its existing style; tabs have no arrow-key navigation (predates this work).
+- The real-LLM path is still untested end to end; the frontend labels mock-mode output honestly instead of hiding it.
+- The English page at `/classic` keeps its seed button (dev only); the Arabic app has no seed (its UX rules forbid invented data).
+
+### Setup for a fresh clone, and vLLM (added the same day)
+- `python scripts/setup.py`: creates `.venv`, installs `requirements.txt` + the package, copies `.env.example` to `.env`, migrates the database, `npm ci` + `npm run build` for the frontend (`--skip-frontend` for backend only). README "Quick start" is now: clone → `python scripts/setup.py` → `.venv/.../python scripts/dev.py` → http://127.0.0.1:8000/.
+- `.env.example` no longer points at a model server by default (`LLM_BASE_URL` empty): a fresh copy runs on the built-in rules instead of failing every extraction on an unreachable `localhost:8001`.
+- **vLLM, no Docker** (`docs/VLLM.md`): `bash scripts/serve_vllm.sh` on a Linux/WSL2 machine with an NVIDIA GPU installs the vLLM nightly build (Qwen3.5 needs it) into `~/.venvs/vllm` and serves `Qwen/Qwen3.5-35B-A3B-FP8` (default; `MODEL=` for the GPTQ-Int4 or full-precision builds) as `qwen3.5` on port 8001 with `--reasoning-parser qwen3 --language-model-only` (`GPUS`, `PORT`, `MAX_LEN`, `API_KEY`, `SERVED_NAME` override). The app then only needs `LLM_BASE_URL=http://<host>:8001/v1`.
+- New setting `LLM_EXTRA_BODY` (JSON merged into every chat request; the client's own fields win). `.env.example` sets `{"chat_template_kwargs": {"enable_thinking": false}}`, since Qwen3.5 thinks by default and the app wants short JSON answers.
+- `python scripts/check_llm.py` sends one structured request through the app's client and explains failures (not configured, unreachable, 401 key, 404 model name with the served names). Checked against a stand-in OpenAI-style server (success, wrong model, wrong key, down). **Not run against a real vLLM**: this machine has no NVIDIA GPU (16 GB RAM, Intel graphics), so the model itself has not been tried with the app yet.

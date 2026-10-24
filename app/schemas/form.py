@@ -19,15 +19,16 @@ NUMERIC_TYPES = frozenset({"integer", "decimal"})
 SELECT_TYPES = frozenset({"select_one", "select_multiple"})
 
 
-def slugify(text: str, limit: int = 40) -> str:
-    """A valid field id / form key from free text ("Phone Number" -> "phone_number")."""
+def slugify(text: str, limit: int = 40, fallback: str = "f") -> str:
+    """A valid field id / form key from free text ("Phone Number" -> "phone_number"). Only Latin
+    letters and digits survive, so text without any (e.g. Arabic) gives `fallback`."""
     out = re.sub(r"[^a-z0-9]+", "_", text.lower()).strip("_")[:limit].rstrip("_")
-    return out if out and out[0].isalpha() else f"f_{out}".rstrip("_")
+    return out if out and out[0].isalpha() else f"{fallback}_{out}".rstrip("_")
 
 
-def unique_slug(text: str, taken: set[str], limit: int = 40) -> str:
+def unique_slug(text: str, taken: set[str], limit: int = 40, fallback: str = "f") -> str:
     """`slugify`, with _2, _3 ... added until it is not in `taken` (which it is then added to)."""
-    base = slug = slugify(text, limit)
+    base = slug = slugify(text, limit, fallback)
     n = 2
     while slug in taken:
         slug, n = f"{base[: limit - 4]}_{n}", n + 1

@@ -6,4 +6,8 @@ import '@fontsource/ibm-plex-sans-arabic/400.css';
 import '@fontsource/ibm-plex-sans-arabic/500.css';
 import '@fontsource/ibm-plex-sans-arabic/600.css';
 import './workspace/workspace.css';
+import './workspace/shared.css';
+import './workspace/forms.css';
+import './workspace/kpi.css';
+import './workspace/screens.css';
 ReactDOM.createRoot(document.getElementById('root')!).render(<React.StrictMode><WorkspaceProvider><Workspace/></WorkspaceProvider></React.StrictMode>);

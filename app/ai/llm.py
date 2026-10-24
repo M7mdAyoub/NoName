@@ -136,6 +136,7 @@ class OpenAICompatibleLLM(LLM):
     def __init__(self, settings: Settings, transport: httpx.BaseTransport | None = None) -> None:
         super().__init__()
         self.model = settings.llm_model_extract
+        self.extra_body = settings.llm_extra_body
         self._client = httpx.Client(
             base_url=settings.llm_base_url.rstrip("/"),
             headers={"Authorization": f"Bearer {settings.llm_api_key or 'none'}"},
@@ -147,6 +148,7 @@ class OpenAICompatibleLLM(LLM):
         self, step: str, messages: list[dict[str, str]], schema: dict[str, Any], payload: Any
     ) -> str:
         body = {
+            **self.extra_body,  # LLM_EXTRA_BODY; the fields below always win
             "model": self.model,
             "messages": messages,
             "temperature": 0,

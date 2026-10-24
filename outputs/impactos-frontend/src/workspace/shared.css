@@ -1,0 +1,8 @@
+/* Shared by several screens: form origin badges and KPI tracking statuses. Same palette as workspace.css. */
+.q-origin{display:inline-flex;align-items:center;font-size:13px;line-height:1.5;padding:4px 9px;border:1px solid #d4cec4;border-radius:5px;background:#f4f0e9;color:#56616a;white-space:nowrap}
+.q-origin-document{background:#edf3ec;border-color:#c6d7c3;color:#31583b}
+.q-origin-manual{background:#eef1f5;border-color:#c9d1db;color:#33475b}
+.q-status-achieved{background:#edf3ec;border-color:#c6d7c3;color:#31583b}
+.q-status-in_progress{background:#eef1f5;border-color:#c9d1db;color:#33475b}
+.q-status-not_started{background:#fbf0dd;border-color:#dec9a7;color:#80531d}
+.q-status-no_target{background:#f4f0e9;border-color:#d4cec4;color:#56616a}
