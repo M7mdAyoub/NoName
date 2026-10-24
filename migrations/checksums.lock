@@ -1,3 +1,4 @@
 # version filename sha256 (LF-normalised). Maintained by scripts/check_migrations.py
 0001 0001_foundation.sql c8ada248e8134423b1d27521dea63fe89234e0b2c8970239b3ffa8581ea8691d
 0002 0002_mvp.sql 5edba544f65284d68e57a0778100b2e35a021442bee899bda5a8d2dc0dc3697f
+0003 0003_extraction.sql d82703859da21ec0bae970cbe946171a43c6ad16491b2216cfb81af9bf90895d

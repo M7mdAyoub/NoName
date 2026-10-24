@@ -26,6 +26,8 @@ class Settings(BaseSettings):
     access_token_minutes: int = 15
     refresh_token_days: int = 30
 
+    # auto: call LLM_BASE_URL when it and LLM_MODEL_EXTRACT are set, else the built-in mock
+    llm_mode: Literal["auto", "mock", "real"] = "auto"
     llm_base_url: str = ""
     llm_api_key: str = ""
     llm_model_extract: str = ""
@@ -50,6 +52,10 @@ class Settings(BaseSettings):
     @property
     def llm_configured(self) -> bool:
         return bool(self.llm_base_url and self.llm_model_extract)
+
+    @property
+    def llm_use_mock(self) -> bool:
+        return self.llm_mode == "mock" or (self.llm_mode == "auto" and not self.llm_configured)
 
     @model_validator(mode="after")
     def _refuse_placeholder_secrets(self) -> Settings:

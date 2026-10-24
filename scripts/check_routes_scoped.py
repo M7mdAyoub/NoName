@@ -33,6 +33,8 @@ UNSCOPED_ALLOWLIST: set[tuple[str, str]] = {
     # MVP (docs/MVP.md): one implicit project, no tenancy
     ("POST", "/upload"),
     ("GET", "/upload/{upload_id}"),
+    ("POST", "/upload/{upload_id}/extract"),
+    ("GET", "/draft"),
 }
 # Routes that must leave this list in the named session. The check prints a warning for each.
 TEMPORARY_ALLOWLIST: dict[tuple[str, str], str] = {

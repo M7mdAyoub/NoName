@@ -26,17 +26,19 @@ def set_status(
     *,
     ir: dict[str, Any] | None = None,
     error: str | None = None,
+    extraction: dict[str, Any] | None = None,
 ) -> None:
     conn.execute(
         text(
             "UPDATE framework_upload SET status = :status, ir = coalesce(:ir, ir), error = :error, "
-            "updated_at = :now WHERE id = :id"
+            "extraction = coalesce(:extraction, extraction), updated_at = :now WHERE id = :id"
         ),
         {
             "id": upload_id,
             "status": status,
             "ir": json.dumps(ir, ensure_ascii=False) if ir is not None else None,
             "error": error,
+            "extraction": json.dumps(extraction) if extraction is not None else None,
             "now": now,
         },
     )
@@ -53,4 +55,5 @@ def get(conn: Connection, upload_id: str) -> dict[str, Any] | None:
     data = dict(row)
     data["files"] = json.loads(data["files"])
     data["ir"] = json.loads(data["ir"]) if data["ir"] else None
+    data["extraction"] = json.loads(data["extraction"]) if data["extraction"] else None
     return data

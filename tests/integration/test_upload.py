@@ -27,7 +27,7 @@ def _files(*names: str) -> list[tuple[str, tuple[str, bytes]]]:
 
 
 def test_upload_parses_every_supported_type(client: TestClient, settings: Settings) -> None:
-    response = client.post("/upload", files=_files(*SAMPLES))
+    response = client.post("/upload", params={"extract": False}, files=_files(*SAMPLES))
     assert response.status_code == 201, response.text
     body = response.json()
     assert body["status"] == "parsed" and body["error"] is None
