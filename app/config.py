@@ -41,6 +41,9 @@ class Settings(BaseSettings):
     # Extra JSON fields for every chat request, e.g. for Qwen3.5 on vLLM without thinking:
     # LLM_EXTRA_BODY={"chat_template_kwargs": {"enable_thinking": false}}
     llm_extra_body: dict[str, Any] = Field(default_factory=dict)
+    # Strict structured outputs (`strict: true`, every field required): needed on Groq, whose
+    # best-effort JSON mode often returns broken JSON. Leave off for vLLM.
+    llm_strict_schema: bool = False
     llm_timeout_seconds: int = Field(default=180, ge=1)
     llm_is_external: bool = False
 

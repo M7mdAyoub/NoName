@@ -180,3 +180,94 @@ def test_real_endpoint_extracts_the_sample() -> None:  # pragma: no cover - need
         llm.close()
     assert len(draft.results) == 6 and len(draft.indicators) == 7
     assert sum(i.definition is not None and not i.definition_errors for i in draft.indicators) >= 5
+
+
+def test_a_server_side_schema_rejection_is_retried_not_fatal() -> None:
+    """Groq answers 400 json_validate_failed for an answer that breaks the schema: that must go
+    through the normal retry-with-problems loop instead of failing the extraction."""
+    answers = iter([
+        httpx.Response(400, json={"error": {"code": "json_validate_failed",
+                                            "message": "Failed to generate JSON.",
+                                            "failed_generation": '{"is_framework": "maybe"}'}}),
+        httpx.Response(200, json={"choices": [{"message": {"content": json.dumps(
+            {"is_framework": False, "columns": []})}}]}),
+    ])  # fmt: skip
+    sent: list[dict[str, Any]] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        sent.append(json.loads(request.content))
+        return next(answers)
+
+    settings = Settings(app_env="test", llm_base_url="http://llm.local/v1",
+                        llm_model_extract="qwen")  # fmt: skip
+    llm = OpenAICompatibleLLM(settings, transport=httpx.MockTransport(handler))
+    out = llm.run("map_layout", "instr", {"rows": ROWS}, TableLayout, check_layout(ROWS))
+    llm.close()
+    assert out.is_framework is False and len(sent) == 2
+    assert "is_framework" in sent[1]["messages"][-1]["content"]  # the problems were sent back
+
+    other = httpx.Response(400, json={"error": {"code": "invalid_request_error"}})
+    llm = OpenAICompatibleLLM(settings, transport=httpx.MockTransport(lambda _: other))
+    with pytest.raises(httpx.HTTPStatusError):  # any other 400 still fails loudly
+        llm.run("map_layout", "instr", {"rows": ROWS}, TableLayout, check_layout(ROWS))
+    llm.close()
+
+
+def test_strict_mode_marks_every_field_required_and_closes_objects() -> None:
+    from app.ai.llm import strict_schema
+    from app.schemas.definition import Definition
+
+    def objects(node: Any) -> list[dict[str, Any]]:
+        found = []
+        if isinstance(node, dict):
+            if node.get("type") == "object" and "properties" in node:
+                found.append(node)
+            for value in node.values():
+                found += objects(value)
+        elif isinstance(node, list):
+            for value in node:
+                found += objects(value)
+        return found
+
+    for model in (TableLayout, Definition):
+        original = model.model_json_schema()
+        strict = strict_schema(original)
+        assert objects(strict) and all(
+            set(o["required"]) == set(o["properties"]) and o["additionalProperties"] is False
+            for o in objects(strict)
+        )
+        assert original == model.model_json_schema()  # the original is not changed
+
+    sent: list[dict[str, Any]] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        sent.append(json.loads(request.content))
+        return httpx.Response(200, json={"choices": [{"message": {"content": json.dumps(
+            {"is_framework": False, "header_row": 0, "columns": []})}}]})  # fmt: skip
+
+    settings = Settings(app_env="test", llm_base_url="http://llm.local/v1",
+                        llm_model_extract="qwen", llm_strict_schema=True)  # fmt: skip
+    llm = OpenAICompatibleLLM(settings, transport=httpx.MockTransport(handler))
+    llm.run("map_layout", "instr", {"rows": ROWS}, TableLayout, check_layout(ROWS))
+    llm.close()
+    spec = sent[0]["response_format"]["json_schema"]
+    assert spec["strict"] is True and spec["schema"]["additionalProperties"] is False
+
+
+def test_rate_limited_requests_wait_and_resend(monkeypatch: pytest.MonkeyPatch) -> None:
+    import app.ai.llm as llm_module
+
+    waits: list[float] = []
+    monkeypatch.setattr(llm_module.time, "sleep", waits.append)
+    answers = iter([
+        httpx.Response(429, headers={"retry-after": "3"}, json={"error": {"code": "rate_limit"}}),
+        httpx.Response(429, json={"error": {"code": "rate_limit"}}),  # no header: back off
+        httpx.Response(200, json={"choices": [{"message": {"content": json.dumps(
+            {"is_framework": False, "columns": []})}}]}),
+    ])  # fmt: skip
+    settings = Settings(app_env="test", llm_base_url="http://llm.local/v1",
+                        llm_model_extract="qwen")  # fmt: skip
+    llm = OpenAICompatibleLLM(settings, transport=httpx.MockTransport(lambda _: next(answers)))
+    out = llm.run("map_layout", "instr", {"rows": ROWS}, TableLayout, check_layout(ROWS))
+    llm.close()
+    assert out.is_framework is False and waits == [3.0, 4.0]

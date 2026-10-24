@@ -75,6 +75,24 @@ It sends one small request through the app's own client and says what to fix if 
 a restart, new uploads are extracted by the model: the upload screen no longer shows the test-mode
 notice, and "إعادة الاستخراج" re-reads an earlier upload with it (before anything is published).
 
+## Hosted instead: Groq (no GPU)
+
+Any OpenAI-compatible service works. For Groq, in `.env` (key from https://console.groq.com/keys):
+
+```
+LLM_BASE_URL=https://api.groq.com/openai/v1
+LLM_API_KEY=gsk_...
+LLM_MODEL_EXTRACT=qwen/qwen3.8-27b
+LLM_EXTRA_BODY={"reasoning_effort": "none"}
+LLM_STRICT_SCHEMA=true
+LLM_MAX_CONCURRENCY=1
+LLM_IS_EXTERNAL=true
+```
+
+`LLM_STRICT_SCHEMA=true` is needed: in its default "best effort" JSON mode Groq often returns
+broken JSON for this model. The client waits and resends when Groq answers 429 (rate limit); on
+the free tier a full extraction can still take a few minutes. Uploaded documents are sent to Groq.
+
 ## Remote GPU servers: keep the port private
 
 Uploaded documents are sent to the model server (answers in fields marked as personal data never

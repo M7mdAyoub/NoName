@@ -12,6 +12,7 @@ Two implementations share that loop:
 
 from __future__ import annotations
 
+import copy
 import json
 import logging
 import threading
@@ -27,6 +28,29 @@ from app.config import Settings
 log = logging.getLogger(__name__)
 M = TypeVar("M", bound=BaseModel)
 MAX_ATTEMPTS = 3
+RATE_LIMIT_RETRIES = 6  # 429 answers: wait as the server asks, then send again
+RATE_LIMIT_MAX_WAIT = 60.0
+
+
+def strict_schema(schema: dict[str, Any]) -> dict[str, Any]:
+    """The schema in the form strict structured-output modes require (Groq `strict: true`):
+    every object lists all its properties as required and allows no others. Optional fields stay
+    nullable or get a value from the model; the answer is still validated by Pydantic."""
+    out = copy.deepcopy(schema)
+
+    def fix(node: Any) -> None:
+        if isinstance(node, dict):
+            if node.get("type") == "object" and "properties" in node:
+                node["required"] = list(node["properties"])
+                node["additionalProperties"] = False
+            for value in node.values():
+                fix(value)
+        elif isinstance(node, list):
+            for value in node:
+                fix(value)
+
+    fix(out)
+    return out
 
 
 class LLMError(Exception):
@@ -130,6 +154,17 @@ def _strip_fences(raw: str) -> str:
     return text.strip()
 
 
+def _schema_rejection(response: httpx.Response) -> str | None:
+    """The model's answer when the server refused it for not matching the JSON schema, else None."""
+    try:
+        error = response.json().get("error") or {}
+    except ValueError:
+        return None
+    if not isinstance(error, dict) or error.get("code") != "json_validate_failed":
+        return None
+    return str(error.get("failed_generation") or "")
+
+
 class OpenAICompatibleLLM(LLM):
     mode = "real"
 
@@ -137,6 +172,7 @@ class OpenAICompatibleLLM(LLM):
         super().__init__()
         self.model = settings.llm_model_extract
         self.extra_body = settings.llm_extra_body
+        self.strict = settings.llm_strict_schema
         self._client = httpx.Client(
             base_url=settings.llm_base_url.rstrip("/"),
             headers={"Authorization": f"Bearer {settings.llm_api_key or 'none'}"},
@@ -158,10 +194,32 @@ class OpenAICompatibleLLM(LLM):
                 "json_schema": {"name": step, "schema": schema},
             },
         }
-        response = self._client.post("/chat/completions", json=body)
+        if self.strict:
+            body["response_format"]["json_schema"] = {
+                "name": step, "strict": True, "schema": strict_schema(schema)}  # fmt: skip
+        response = self._post(body)
+        if response.status_code == 400 and (failed := _schema_rejection(response)) is not None:
+            # Some servers (Groq) check the answer against the schema themselves and answer 400
+            # instead of returning it. Hand it to `run`, which retries with the problems listed.
+            return failed
         response.raise_for_status()
         content: str = response.json()["choices"][0]["message"]["content"] or ""
         return content
+
+    def _post(self, body: dict[str, Any]) -> httpx.Response:
+        """POST, waiting and resending while the server answers 429 (rate limit)."""
+        for attempt in range(RATE_LIMIT_RETRIES + 1):
+            response = self._client.post("/chat/completions", json=body)
+            if response.status_code != 429 or attempt == RATE_LIMIT_RETRIES:
+                return response
+            try:
+                wait = float(response.headers.get("retry-after", ""))
+            except ValueError:
+                wait = 2.0 ** (attempt + 1)
+            wait = min(max(wait, 1.0), RATE_LIMIT_MAX_WAIT)
+            log.warning("llm rate limited", extra={"wait_s": wait, "attempt": attempt + 1})
+            time.sleep(wait)
+        return response
 
     def close(self) -> None:
         self._client.close()
