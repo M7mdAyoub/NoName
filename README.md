@@ -34,7 +34,12 @@ This applies the database migrations and starts the API on http://127.0.0.1:8000
 background worker. Open that address for the demo page (upload a framework, review and publish,
 submit data, view the dashboard) or http://127.0.0.1:8000/docs for the API.
 
-A sample framework is in `tests/fixtures/sample_logframe.xlsx`. To run the whole flow
+A sample framework is in `tests/fixtures/sample_logframe.xlsx`;
+`tests/fixtures/sample_logframe_with_forms.xlsx` adds two form sheets. Forms already in the
+uploaded files (one sheet or table per questionnaire) become the project's forms, and the AI only
+designs forms for indicators none of them covers. The **Forms** tab is a form builder with a live
+preview, for checking and editing those forms or building new ones. The **Dashboard** tracks every
+KPI against its target and shows which form feeds it. To run the whole flow
 end-to-end against a running API on an empty database:
 ```bash
 python scripts/demo.py

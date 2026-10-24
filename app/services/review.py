@@ -3,6 +3,8 @@
 Rules:
 - Results, indicators, definitions and open-question answers can be edited at any time.
 - A form can only be edited while it is a draft; once published, submissions depend on it.
+  Forms can be created in the form builder at any time (also after publishing; publish again to
+  use them) and deleted while they are drafts that no definition reads.
 - A definition only needs to parse to be saved as a draft; its problems show in `GET /draft`.
   Once its indicator is published, a definition must be fully valid to be saved.
 - Publish refuses while any form or definition has problems. Indicators without a definition
@@ -18,8 +20,8 @@ from pydantic import ValidationError
 from app.db.connection import Database
 from app.db.ids import new_id, utc_now
 from app.repositories import draft as repo
-from app.schemas.definition import KINDS, Definition, validate_definition
-from app.schemas.form import FormSchema, validate_form
+from app.schemas.definition import KINDS, Definition, forms_used, validate_definition
+from app.schemas.form import FormSchema, unique_slug, validate_form
 
 
 class NotFound(LookupError):
@@ -72,14 +74,69 @@ def update_form(db: Database, key: str, title: str | None, schema: dict[str, Any
     new_schema = schema if schema is not None else current["schema"]
     if title is not None:
         new_schema = {**new_schema, "title": title}
+    # where the form came from is not the editor's to change
+    for kept in ("origin", "source"):
+        new_schema = {**new_schema, kept: current["schema"].get(kept)}
+    form = _valid_form(new_schema)
+    with db.write_tx() as conn:
+        repo.update_form(conn, key, form.title, form.model_dump(mode="json"), utc_now())
+
+
+def _valid_form(schema: dict[str, Any]) -> FormSchema:
     try:
-        form = FormSchema.model_validate(new_schema)
+        form = FormSchema.model_validate(schema)
     except ValidationError as exc:
         raise Invalid("form schema is not valid", _pydantic_errors(exc)) from exc
     if errors := validate_form(form):
         raise Invalid("form schema is not valid", errors)
+    return form
+
+
+def create_form(db: Database, title: str, schema: dict[str, Any] | None) -> str:
+    """A new draft form (from the form builder); returns its key, made from the title."""
+    if not title.strip():
+        raise Invalid("form schema is not valid", ["title is empty"])
+    schema = schema or {"fields": [{"id": "question_1", "type": "text", "label": "Question 1"}]}
+    form = _valid_form(
+        {**schema, "title": title.strip(), "origin": schema.get("origin") or "manual"}
+    )
     with db.write_tx() as conn:
-        repo.update_form(conn, key, form.title, form.model_dump(mode="json"), utc_now())
+        key = unique_slug(form.title, repo.form_keys(conn), 30)
+        repo.insert_form(conn, new_id(), key, form.title, form.model_dump(mode="json"), utc_now())
+    return key
+
+
+def delete_form(db: Database, key: str) -> None:
+    with db.write_tx() as conn:
+        draft = repo.read(conn)
+        form = next((f for f in draft["forms"] if f["key"] == key), None)
+        if form is None:
+            raise NotFound("form not found")
+        if form["status"] == "published":
+            raise Conflict("form is published and can no longer be deleted")
+        users = []
+        for d in draft["definitions"]:
+            try:
+                if key in forms_used(Definition.model_validate(d["definition"])):
+                    users.append(d["indicator_id"])
+            except ValidationError:
+                continue
+        if users:
+            raise Conflict(f"form is used by the calculation rule of {len(users)} indicator(s); "
+                           "change those rules first")  # fmt: skip
+        repo.delete_form(conn, key)
+
+
+def delete_definition(db: Database, indicator_id: str) -> None:
+    """Drop a draft rule: the indicator is then published without one (not computable)."""
+    with db.write_tx() as conn:
+        draft = repo.read(conn)
+        indicator = next((i for i in draft["indicators"] if i["id"] == indicator_id), None)
+        if indicator is None:
+            raise NotFound("indicator not found")
+        if indicator["status"] == "published":
+            raise Conflict("a published indicator keeps its rule; replace it instead")
+        repo.delete_definition(conn, indicator_id)
 
 
 def put_definition(db: Database, indicator_id: str, body: dict[str, Any]) -> list[str]:

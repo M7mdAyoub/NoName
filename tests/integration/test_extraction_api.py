@@ -38,6 +38,7 @@ def test_upload_extracts_a_complete_draft(client: TestClient, db: Database) -> N
     extraction = upload["extraction"]
     assert extraction["mode"] == "mock"
     assert extraction["counts"] == {"results": 6, "indicators": 7, "forms": 7, "definitions": 7,
+                                    "forms_from_documents": 0,
                                     "invalid_definitions": 0, "open_questions": 1}  # fmt: skip
 
     draft = client.get("/draft").json()

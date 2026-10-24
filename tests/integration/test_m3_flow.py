@@ -151,6 +151,8 @@ def test_seed_fills_every_published_form(client: TestClient, db: Database) -> No
 
     assert client.get("/dashboard").json() == {
         "published": False, "results": client.get("/draft").json()["results"],
+        "summary": {"total": 0, "achieved": 0, "in_progress": 0, "not_started": 0,
+                    "no_target": 0, "not_computable": 0},
         "indicators": [], "submissions": {},
     }  # fmt: skip
     assert seed.seed(db, per_form=0) == {}  # nothing published yet

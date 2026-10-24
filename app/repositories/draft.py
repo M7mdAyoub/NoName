@@ -211,3 +211,18 @@ def publish(conn: Connection, now: str) -> None:
     conn.execute(text("UPDATE indicator SET status = 'published' WHERE status = 'draft'"))
     conn.execute(text("UPDATE indicator_definition SET status = 'approved', updated_at = :now"
                       " WHERE status = 'draft'"), {"now": now})  # fmt: skip
+
+
+def form_keys(conn: Connection) -> set[str]:
+    return {row[0] for row in conn.execute(text("SELECT key FROM form"))}
+
+
+def delete_form(conn: Connection, key: str) -> None:
+    conn.execute(text("DELETE FROM form WHERE key = :key AND status = 'draft'"), {"key": key})
+
+
+def delete_definition(conn: Connection, indicator_id: str) -> None:
+    conn.execute(
+        text("DELETE FROM indicator_definition WHERE indicator_id = :id AND status = 'draft'"),
+        {"id": indicator_id},
+    )

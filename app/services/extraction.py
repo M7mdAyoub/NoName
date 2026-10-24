@@ -11,7 +11,7 @@ from typing import Any
 
 from app.ai import pipeline
 from app.ai.llm import LLM, make_llm
-from app.ai.steps import PROMPT_VERSION
+from app.ai.steps import PROMPT_VERSION, DocumentForm
 from app.config import Settings
 from app.db.connection import Database
 from app.db.ids import new_id, utc_now
@@ -76,6 +76,7 @@ def _summary(draft: pipeline.Draft, llm: LLM) -> dict[str, Any]:
             "results": len(draft.results),
             "indicators": len(draft.indicators),
             "forms": len(draft.forms),
+            "forms_from_documents": sum(isinstance(f, DocumentForm) for f in draft.forms),
             "definitions": sum(i.definition is not None for i in draft.indicators),
             "invalid_definitions": sum(bool(i.definition_errors) for i in draft.indicators),
             "open_questions": len(draft.questions),
@@ -97,7 +98,7 @@ def _store(conn: Any, upload_id: str, draft: pipeline.Draft) -> None:
     indicator_ids = {i.ref: new_id() for i in draft.indicators}
     for i in draft.indicators:
         draft_repo.insert_indicator(conn, {
-            "id": indicator_ids[i.ref], "result_id": result_ids[i.result_key], "code": None,
+            "id": indicator_ids[i.ref], "result_id": result_ids[i.result_key], "code": i.code,
             "name": i.name, "unit": i.unit, "kind": i.kind, "baseline": i.baseline,
             "target": i.target, "frequency": i.frequency, "data_source": i.data_source,
             "created_at": now,

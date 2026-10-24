@@ -61,6 +61,46 @@ def write_xlsx(path: Path) -> None:
     wb.save(path)
 
 
+# Forms a project may already have, one sheet each: question in column A, answer options in
+# column B (one per line, or "a / b"), section rows merged across both columns.
+FORM_SHEETS: dict[str, list[list[str]]] = {
+    "Follow-up survey": [
+        ["Respondent ID", "(open text)"],
+        ["Sex", "Female\nMale"],
+        ["SECTION A - PRACTICES"],
+        ["1. Since the training, have you applied the new practices?",
+         "Yes, regularly\nYes, sometimes\nNo"],
+        ["2. Which practices have you applied? (Select all that apply)",
+         "Composting\nDrip irrigation\nImproved seeds\nOther"],
+        ["3. How many people in your household work on the farm?", "Number: ____"],
+        ["SECTION B - CLOSING"],
+        ["4. Comments", "(open text)"],
+    ],
+    "Training attendance records": [
+        ["Participant ID", ""],
+        ["Participant name", ""],
+        ["Phone number", ""],
+        ["Sex", "Female / Male"],
+        ["Session date", ""],
+    ],
+}  # fmt: skip
+
+
+def write_xlsx_with_forms(path: Path) -> None:
+    """The xlsx logframe plus two form sheets whose names match two indicators' data sources."""
+    from openpyxl import load_workbook
+
+    write_xlsx(path)
+    wb = load_workbook(path)
+    for title, rows in FORM_SHEETS.items():
+        ws = wb.create_sheet(title)
+        for n, row in enumerate(rows, start=1):
+            ws.append(row)
+            if len(row) == 1:
+                ws.merge_cells(f"A{n}:B{n}")
+    wb.save(path)
+
+
 def write_csv(path: Path) -> None:
     with path.open("w", newline="", encoding="utf-8") as handle:
         writer = csv.writer(handle, delimiter=";")
@@ -157,6 +197,9 @@ def main() -> int:
         target = OUT / f"sample_logframe.{suffix}"
         writer(target)
         print(f"wrote {target.relative_to(ROOT)}")
+    target = OUT / "sample_logframe_with_forms.xlsx"
+    write_xlsx_with_forms(target)
+    print(f"wrote {target.relative_to(ROOT)}")
     return 0
 
 

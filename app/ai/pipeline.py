@@ -1,8 +1,10 @@
 """Framework IR -> draft (results, indicators, forms, definitions, open questions).
 
 Steps (plan §11.3, simplest version): map each table's layout (LLM) -> build the results tree and
-raw indicator rows in code -> normalise each indicator (LLM) -> propose forms grouped by data
-source (LLM) -> propose a definition per indicator (LLM) -> cross-check in code.
+raw indicator rows in code -> normalise each indicator (LLM) -> turn the forms found in the
+documents into form schemas (LLM, one call per sheet/table) and link indicators to them by data
+source (code) -> propose forms for the indicators left over, grouped by data source (LLM) ->
+propose a definition per indicator (LLM) -> cross-check in code.
 
 Pure: no database access, so no transaction is ever held across an LLM call. The caller stores
 the returned `Draft`.
@@ -18,7 +20,7 @@ from typing import Any
 from app.ai import steps
 from app.ai.llm import LLM, LLMError
 from app.schemas.definition import Definition, validate_definition
-from app.schemas.form import FormSchema, validate_form
+from app.schemas.form import FormField, FormSchema, Option, unique_slug, validate_form
 
 
 class ExtractionError(Exception):
@@ -41,6 +43,7 @@ class DraftIndicator:
     result_key: str
     raw: dict[str, str]
     name: str
+    code: str | None = None
     unit: str | None = None
     kind: str | None = None
     baseline: float | None = None
@@ -117,6 +120,10 @@ def build_structure(
         )
         indicator = cell(row, "indicator")
         if level or code or statement:
+            named = next((n for n in level_rank if statement.lower().startswith(n.lower() + " ")),
+                         None)  # fmt: skip
+            if not level and named:
+                level = named  # an empty level cell, but "Activity D | ..." names a known level
             if not level:
                 level = (
                     f"Level {_depth(code)}"
@@ -145,7 +152,11 @@ def build_structure(
             raw["indicator"] = indicator
             indicators.append(
                 DraftIndicator(
-                    ref=f"i{len(indicators) + 1}", result_key=current.key, raw=raw, name=indicator
+                    ref=f"i{len(indicators) + 1}",
+                    result_key=current.key,
+                    raw=raw,
+                    name=indicator,
+                    code=code or None,
                 )  # fmt: skip
             )
     return order, indicators
@@ -159,11 +170,24 @@ def _parent(order: list[DraftResult], rank: dict[str, int], level: str, code: st
     if not higher:
         return None
     if code:
-        prefixed = [r for r in higher if r.code and code.startswith(r.code.rstrip(".") + ".")]
+        prefixed = [r for r in higher if r.code and _code_under(code, r.code)]
         if prefixed:
             return max(prefixed, key=lambda r: len(r.code or "")).key
     one_up = [r for r in higher if rank[r.level_name] == mine - 1]
     return (one_up or higher)[-1].key
+
+
+_TRAILING_ZERO = re.compile(r"[.\-_ ]0$")
+
+
+def _code_under(code: str, parent: str) -> bool:
+    """Does `code` sit under `parent`? 1 -> 1.1, A -> A1, X-SO1-0 -> X-SO1-A (a trailing 0
+    segment marks the head of its group), but not 1 -> 10."""
+    base = _TRAILING_ZERO.sub("", parent.rstrip(".-_ "))
+    if not base or code == parent or len(code) <= len(base) or not code.startswith(base):
+        return False
+    after = code[len(base)]
+    return after in ".-_ " or (base[-1].isalpha() and after.isdigit())
 
 
 # --- E. normalise --------------------------------------------------------------------------------
@@ -207,13 +231,123 @@ def normalize(llm: LLM, ind: DraftIndicator, result: DraftResult) -> list[str]:
     return questions
 
 
+# --- F. forms found in the documents ---------------------------------------------------------
+
+
+@dataclass
+class FormCandidate:
+    title: str  # sheet name, or the heading above the table
+    source: str  # "file.xlsx > Sheet", for people
+    rows: list[list[str]]
+    cut_name: bool = False  # a sheet name at Excel's 31-character limit may have been cut
+
+
+EXCEL_SHEET_NAME_LIMIT = 31
+
+
+def form_candidates(ir: dict[str, Any], skip: set[tuple[str, str]]) -> list[FormCandidate]:
+    """Tables that may be forms: each sheet (all its tables together) and each document table
+    that is not a framework table. The model decides which really are forms."""
+    out: list[FormCandidate] = []
+    for file_ir in ir["files"]:
+        filename = file_ir["source"]["filename"]
+        sheets: dict[str, list[list[str]]] = {}
+        heading: str | None = None
+        for block in file_ir["blocks"]:
+            if block["kind"] == "heading":
+                heading = block["text"]
+            if block["kind"] != "table" or (filename, block["id"]) in skip:
+                continue
+            sheet = block["ref"].get("sheet")
+            if sheet is not None:
+                sheets.setdefault(sheet, []).extend(block["rows"])
+            else:
+                title = heading or filename.rsplit(".", 1)[0]
+                out.append(FormCandidate(title, f"{filename} > {title}", block["rows"]))
+        for sheet, rows in sheets.items():
+            out.append(FormCandidate(sheet, f"{filename} > {sheet}", rows,
+                                     cut_name=len(sheet) == EXCEL_SHEET_NAME_LIMIT))  # fmt: skip
+    return out
+
+
+def import_form(llm: LLM, cand: FormCandidate) -> tuple[steps.ImportedForm | None, list[str]]:
+    """Ask the model to read one candidate as a form; None if it is not one."""
+    rows = [[cell[:400] for cell in row] for row in cand.rows[: steps.FORM_SAMPLE_ROWS]]
+    payload = {"title": cand.title, "rows": rows}
+    text = "\n".join(" | ".join(row) for row in rows)
+    try:
+        out = llm.run("convert_form", steps.CONVERT_FORM, payload, steps.ImportedForm,
+                      steps.check_imported(text))  # fmt: skip
+    except LLMError as exc:
+        return None, [f"{cand.source}: could not be read as a form: {exc}"]
+    return (out if out.is_form and out.questions else None), []
+
+
+_NUMBERING = re.compile(r"^\s*(?:[A-Z]?\d+(?:\.\d+)*[.)]|[a-z][.)])\s+")
+
+
+def to_document_form(
+    out: steps.ImportedForm, cand: FormCandidate, keys: set[str]
+) -> steps.DocumentForm:
+    """Model answer -> form: field ids and option values are made in code from the labels."""
+    ids: set[str] = set()
+    fields: list[FormField] = []
+    entity: str | None = None
+    for q in out.questions:
+        label = _NUMBERING.sub("", q.label).strip() or q.label.strip()
+        values: set[str] = set()
+        labels = dict.fromkeys(o.strip() for o in q.options if o.strip())
+        field_ = FormField(id=unique_slug(label, ids), type=q.type, label=label,
+                           required=q.required, pii=q.pii,
+                           options=[Option(value=unique_slug(o, values), label=o) for o in labels],
+                           qualitative=q.qualitative and q.type == "text",
+                           section=q.section)  # fmt: skip
+        if entity is None and q.label == out.entity_key and q.type in ("text", "integer"):
+            entity, field_.required = field_.id, True
+        fields.append(field_)
+    title = out.title.strip() or cand.title.replace("_", " ").strip()
+    return steps.DocumentForm(key=unique_slug(cand.title, keys, 30), title=title,
+                              data_source=cand.title, indicators=[], entity_key_field=entity,
+                              fields=fields, source=cand.source,
+                              cut_name=cand.cut_name)  # fmt: skip
+
+
+_FORM_WORDS = frozenset({"form", "forms", "sheet", "questionnaire", "template", "the", "tool"})
+
+
+def _name_tokens(text: str) -> list[str]:
+    text = re.sub(r"\(.*?\)", " ", text.lower())
+    return [t for t in re.findall(r"[a-z0-9]+", text) if t not in _FORM_WORDS]
+
+
+def match_form(data_source: str | None, forms: list[steps.DocumentForm]) -> str | None:
+    """The document form an indicator's data source names, if exactly one fits: the same words
+    once "form", "sheet" ... and anything in brackets are dropped, or, for a sheet name Excel may
+    have cut at 31 characters, the start of the data source."""
+    wanted = _name_tokens(data_source or "")
+    if not wanted:
+        return None
+    exact = [f for f in forms
+             if wanted in (_name_tokens(f.data_source or ""), _name_tokens(f.title))]  # fmt: skip
+    if len(exact) == 1:
+        return exact[0].key
+    joined = " ".join(wanted)
+    cut = [f for f in forms
+           if f.cut_name and joined.startswith(" ".join(_name_tokens(f.data_source or "")))]  # fmt: skip
+    return cut[0].key if len(cut) == 1 else None
+
+
 # --- G. forms ------------------------------------------------------------------------------------
 
 
 def propose_forms(
-    llm: LLM, indicators: list[DraftIndicator], results: dict[str, DraftResult]
+    llm: LLM,
+    indicators: list[DraftIndicator],
+    results: dict[str, DraftResult],
+    keys_in_use: frozenset[str] = frozenset(),
 ) -> tuple[list[steps.ProposedForm], list[str]]:
-    payload = {
+    payload: dict[str, Any] = {
+        "keys_in_use": sorted(keys_in_use),
         "indicators": [
             {
                 "ref": i.ref,
@@ -225,12 +359,12 @@ def propose_forms(
                 "result": results[i.result_key].statement,
             }  # fmt: skip
             for i in indicators
-        ]
+        ],
     }
     refs = [i.ref for i in indicators]
     try:
         out = llm.run("propose_forms", steps.PROPOSE_FORMS, payload, steps.FormsProposal,
-                      steps.check_forms(refs))  # fmt: skip
+                      steps.check_forms(refs, keys_in_use))  # fmt: skip
     except LLMError as exc:
         if not isinstance(exc.last, steps.FormsProposal):
             raise ExtractionError(f"no usable forms: {exc}") from exc
@@ -313,6 +447,7 @@ def extract(llm: LLM, ir: dict[str, Any], max_workers: int = 4) -> Draft:
     problems: list[str] = []
     tables: list[dict[str, Any]] = []
     candidates: list[tuple[dict[str, Any], list[DraftResult], list[DraftIndicator]]] = []
+    framework_blocks: set[tuple[str, str]] = set()
     for filename, block in _tables(ir):
         info: dict[str, Any] = {"file": filename, "block": block["id"], "framework": False}
         tables.append(info)
@@ -323,6 +458,7 @@ def extract(llm: LLM, ir: dict[str, Any], max_workers: int = 4) -> Draft:
             continue
         if not layout.is_framework:
             continue
+        framework_blocks.add((filename, block["id"]))
         results, indicators = build_structure(block["rows"], layout)
         roles = sum(c.role != "ignore" for c in layout.columns)
         info.update(framework=True, columns=roles, results=len(results), indicators=len(indicators))
@@ -346,8 +482,28 @@ def extract(llm: LLM, ir: dict[str, Any], max_workers: int = 4) -> Draft:
     for ind, qs in zip(indicators, asked, strict=True):
         questions += [(ind.ref, q) for q in qs]
 
-    forms, form_problems = propose_forms(llm, indicators, by_key)
-    problems += form_problems
+    # Forms the documents already contain come first; the AI only designs the missing ones.
+    found = form_candidates(ir, framework_blocks)
+    with ThreadPoolExecutor(max_workers=max_workers) as pool:
+        imported = list(pool.map(lambda c: import_form(llm, c), found))
+    keys: set[str] = set()
+    document_forms: list[steps.DocumentForm] = []
+    for cand, (out, import_problems) in zip(found, imported, strict=True):
+        problems += import_problems
+        if out is not None:
+            document_forms.append(to_document_form(out, cand, keys))
+    left: list[DraftIndicator] = []
+    for ind in indicators:
+        key = match_form(ind.data_source or ind.raw["means_of_verification"], document_forms)
+        if key is None:
+            left.append(ind)
+        else:
+            next(f for f in document_forms if f.key == key).indicators.append(ind.ref)
+    forms: list[steps.ProposedForm] = list(document_forms)
+    if left:
+        ai_forms, form_problems = propose_forms(llm, left, by_key, frozenset(keys))
+        forms += ai_forms
+        problems += form_problems
     schemas = {f.key: f.form_schema() for f in forms}
     with ThreadPoolExecutor(max_workers=max_workers) as pool:
         list(pool.map(lambda i: propose_definition(llm, i, forms, schemas), indicators))

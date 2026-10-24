@@ -63,7 +63,10 @@ def cell_text(value: Any) -> str:
         return ""
     if isinstance(value, float) and value.is_integer():
         return str(int(value))
-    return " ".join(str(value).split())  # collapse internal newlines/whitespace
+    # Collapse spaces inside each line but keep line breaks: in a cell they often separate list
+    # items, such as the answer options of a form question.
+    lines = (" ".join(line.split()) for line in str(value).splitlines())
+    return "\n".join(line for line in lines if line)
 
 
 def trim_table(rows: list[list[str]]) -> list[list[str]]:

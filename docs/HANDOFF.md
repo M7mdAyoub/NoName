@@ -190,3 +190,33 @@ rm -f data/app.db data/app.db-wal data/app.db-shm    # fresh start
 ### What's next / known gaps
 - The MVP flow in docs/MVP.md is complete. Ideas if there is time: a real model run on the sample (`LLM_MODE=real ...`, then `scripts/demo.py`), a time dimension on the dashboard (`collected_at` is stored but unused), editing rules with a form instead of JSON.
 - To start over in a demo, stop the API and delete `data/app.db*`; nothing can be unpublished.
+
+## M4.1 — Forms from the documents, form builder, KPI tracking (2026-10-24)
+
+### What works
+- **Forms already in the upload become the forms.** After the framework table is found, every other sheet (all its tables together) and every non-framework document table is a form candidate. A new LLM step `convert_form` (`app/ai/steps.py`, section F) decides whether it is a form and returns its questions (`label, type, options, required, pii, qualitative, section`, plus `entity_key` = the identifier question's label). Check: every label must appear in the source text (the model may not invent or reword questions), selects need ≥ 2 options, no options on other types. Field ids and option values are made in code from the labels (`unique_slug`); leading numbering ("12.") is dropped. Stored forms carry `origin: "document"` and `source: "file.xlsx > Sheet"`; AI forms get `origin: "ai"`, builder forms `"manual"` (new optional `FormSchema.origin/source`, `FormField.section`).
+- **Indicators are linked to those forms by data source** (`pipeline.match_form`): same words after dropping "form/sheet/questionnaire/template/tool" and anything in brackets; for a sheet name at Excel's 31-character limit, the start of the data source. Only one candidate may match. Indicators left over go to `propose_forms` as before (with `keys_in_use` so keys don't clash). Definitions are then proposed against the real questions; the prompt tells the model to filter ratio numerators on the yes-like options.
+- **Parser keeps line breaks inside cells** (`cell_text`): option lists written one per line survive. Spaces within a line are still collapsed.
+- **Generic framework fixes:** a column titled "Type" (also "result type", "hierarchy" ...) is the level; among several target columns the mock prefers final/overall/total/end ones and skips ones marked deleted/obsolete (the layout prompt says the same); codes like `X-SO1-0` head their group (`X-SO1-A` sits under it) and `A` → `A1` nests (`pipeline._code_under`); an empty level cell takes a known level named at the start of the statement ("Activity D | …"); a "Milestone" level makes the indicator a milestone; indicators now keep the row's code (`indicator.code`).
+- **Form builder** (Forms tab): list of forms with origin badge, question count, how many indicators each feeds and status; editor with title, identifier question, and per question label, type (text, whole number, decimal, choose one, choose several, date), options (one per line; existing option values are kept when labels stay), required, personal data, open text for themes, min/max/unit, section, id (auto from the label for new questions, editable), move up/down, remove; live preview of the form as collectors will see it; save/discard/delete, unsaved-changes guard. Published forms are shown read-only.
+- New endpoints: `POST /draft/forms {title, schema?}` (201; key from the title; works after publishing too, then `POST /publish` again), `DELETE /draft/forms/{key}` (draft only, 409 if a rule reads it), `DELETE /draft/definitions/{indicator_id}` (draft only; the indicator is then published without a rule and shows as not computable). `PATCH /draft/forms/{key}` keeps `origin`/`source` from the stored form.
+- **Dashboard = KPI tracking.** Each indicator now has `forms: [{key, title, submissions, origin}]` and `track`: `achieved` (progress ≥ 100 %, or milestone done), `in_progress`, `not_started`, `no_target`, `not_computable`; the response has `summary` with the count per track. The page shows summary tiles (click to filter), a KPI table (code, KPI, level/frequency, forms with submission counts — click opens that form in Collect — baseline, target, actual, progress bar, status; breakdowns folded), or the cards view. Review shows each indicator's forms too, and Collect says which KPIs the chosen form feeds.
+- Fixture `tests/fixtures/sample_logframe_with_forms.xlsx` (built by `scripts/make_samples.py`): the sample logframe plus sheets "Follow-up survey" (ID, sex, two sections, choose-one, select-all, number, comments) and "Training attendance records". Result with the mock: 2 forms from the file + 5 from the AI, all 7 rules valid; the % indicator's rule reads the survey's "have you applied…" question with `in [yes_regularly, yes_sometimes]`.
+
+### How to run
+```
+.venv/Scripts/python scripts/check.py      # 7/7 PASS, 161 passed + 1 skipped
+.venv/Scripts/python -m pytest tests/ai/test_form_import.py tests/integration/test_form_builder.py
+```
+Upload `tests/fixtures/sample_logframe_with_forms.xlsx` on the page, then open the Forms tab.
+
+### Files
+- New: `tests/ai/test_form_import.py`, `tests/integration/test_form_builder.py`, `tests/fixtures/sample_logframe_with_forms.xlsx`.
+- Changed: `app/ai/{pipeline,steps,mock}.py`, `app/ingestion/ir.py`, `app/schemas/form.py` (`slugify`, `unique_slug`, origin/source/section), `app/services/{review,dashboard,extraction}.py`, `app/repositories/draft.py`, `app/api/routers/review.py` (DELETE routes use `api_route` because the hard-delete check flags any `.delete(` call), `app/static/index.html` (Forms tab, KPI dashboard), `scripts/{make_samples,check_routes_scoped}.py`, two existing tests for the new response keys.
+
+### Shortcuts and limits
+- One LLM call per candidate sheet/table (first 150 rows, cells cut at 400 characters). Repeating groups ("record up to three times"), skip logic and compound answers ("Date: ____ / Mode: …") become a single text question.
+- Linking is by data-source name only; an indicator whose data source names no form (or names one ambiguously) gets an AI form. A reviewer can point a rule at any form in the rule editor.
+- The mock's form reading is heuristic (question in one column, options in the next, short leading tags, upper-case or "Section" rows as sections); a real model is expected to do better. Real-model import is untested, like the rest of the real-LLM path.
+- Rules are still edited as JSON; the builder covers forms only.
+- `track` has no time dimension: "in progress" means some progress, not "on schedule".

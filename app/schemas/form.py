@@ -19,6 +19,22 @@ NUMERIC_TYPES = frozenset({"integer", "decimal"})
 SELECT_TYPES = frozenset({"select_one", "select_multiple"})
 
 
+def slugify(text: str, limit: int = 40) -> str:
+    """A valid field id / form key from free text ("Phone Number" -> "phone_number")."""
+    out = re.sub(r"[^a-z0-9]+", "_", text.lower()).strip("_")[:limit].rstrip("_")
+    return out if out and out[0].isalpha() else f"f_{out}".rstrip("_")
+
+
+def unique_slug(text: str, taken: set[str], limit: int = 40) -> str:
+    """`slugify`, with _2, _3 ... added until it is not in `taken` (which it is then added to)."""
+    base = slug = slugify(text, limit)
+    n = 2
+    while slug in taken:
+        slug, n = f"{base[: limit - 4]}_{n}", n + 1
+    taken.add(slug)
+    return slug
+
+
 class Option(BaseModel):
     model_config = ConfigDict(extra="forbid")
     value: str
@@ -42,6 +58,7 @@ class FormField(BaseModel):
     constraints: Constraints | None = None
     pii: bool = False  # never sent to the LLM, hidden from exports
     qualitative: bool = False  # open text for qualitative analysis
+    section: str | None = None  # heading this question sits under, shown above it on the form
 
 
 class FormSchema(BaseModel):
@@ -51,6 +68,10 @@ class FormSchema(BaseModel):
     # The field whose answer identifies who/what a record is about (copied to submission.entity_key)
     entity_key_field: str | None = None
     fields: list[FormField]
+    # Where the form came from: taken from an uploaded document, proposed by the AI, or built by
+    # hand in the form builder. `source` says where in the document (e.g. "file.xlsx > Sheet").
+    origin: Literal["document", "ai", "manual"] | None = None
+    source: str | None = None
 
     def field(self, field_id: str) -> FormField | None:
         return next((f for f in self.fields if f.id == field_id), None)

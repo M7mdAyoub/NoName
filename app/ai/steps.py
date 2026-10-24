@@ -6,6 +6,7 @@ Checks are deterministic code, so a real model and the mock are held to the same
 
 from __future__ import annotations
 
+import re
 from collections.abc import Callable, Mapping
 from typing import Any, Literal
 
@@ -47,7 +48,10 @@ You get the first rows of the table. Return:
 - header_row: index (0-based) of the row with the column titles.
 - columns: the role of each useful column, by 0-based index. Roles: level (Impact/Outcome/Output \
 ...), result_code (1, 1.1, ...), result_statement, indicator, unit, baseline, target, \
-means_of_verification (data source), frequency, ignore. Each role at most once.
+means_of_verification (data source), frequency, ignore. Each role at most once. A column named \
+"Type" that says Impact/Outcome/Output/Activity... is the level. When several columns could \
+take a role (e.g. targets per quarter plus a final target), choose the final/overall one and \
+ignore columns marked as obsolete.
 Example: header ["Level","Code","Result","Indicator","Baseline","Target"] -> \
 {"is_framework": true, "header_row": 0, "columns": [{"index":0,"role":"level"},\
 {"index":1,"role":"result_code"},{"index":2,"role":"result_statement"},\
@@ -122,6 +126,78 @@ def check_normalized(row: Mapping[str, str]) -> Callable[[NormalizedIndicator], 
     return check
 
 
+# --- F. forms found in the documents ------------------------------------------------------------
+
+ImportedType = Literal["text", "integer", "decimal", "select_one", "select_multiple", "date"]
+FORM_SAMPLE_ROWS = 150
+
+
+class ImportedQuestion(BaseModel):
+    model_config = _STRICT
+    label: str = Field(min_length=1, description="the question as written in the document")
+    type: ImportedType
+    options: list[str] = Field(default_factory=list, description="answer options, as written")
+    required: bool = False
+    pii: bool = False
+    qualitative: bool = False
+    section: str | None = None
+
+
+class ImportedForm(BaseModel):
+    model_config = _STRICT
+    is_form: bool
+    title: str = ""
+    entity_key: str | None = Field(default=None, description="label of the identifier question")
+    questions: list[ImportedQuestion] = Field(default_factory=list)
+
+
+CONVERT_FORM = """You read one table (or sheet) of a project document and decide whether it is \
+a data-collection form or questionnaire: a list of questions to ask, often with answer \
+options. A table of results, indicators, assumptions, risks, budgets or collected data is not \
+a form.
+If it is a form, return every question in order, keeping its wording (drop only question \
+numbers such as "12."). For each one:
+- type: select_one or select_multiple when answer options are listed (select_multiple when it \
+says "select all that apply" or similar), integer/decimal for numbers and counts, date for \
+dates, text otherwise (including "open text" and answers with blanks to fill in).
+- options: the listed answer options, one per item, as written. Options are often one per line \
+or separated by " / ". No options for non-select types.
+- pii: true for names of people, phone numbers, emails, ID numbers, addresses.
+- qualitative: true for open-text answers worth a thematic analysis (comments, reasons, notes).
+- section: the section heading the question sits under, if any. Section rows are not questions.
+entity_key: the label of the question that identifies the person or thing a record is about \
+(e.g. a national ID), if there is one. title: a short name for the form."""
+
+
+def _letters(text: str) -> str:
+    return re.sub(r"[^a-z0-9]+", "", text.lower())
+
+
+def check_imported(source_text: str) -> Callable[[ImportedForm], list[str]]:
+    """The questions must come from the document: every label has to appear in it."""
+    haystack = _letters(source_text)
+
+    def check(form: ImportedForm) -> list[str]:
+        errors: list[str] = []
+        if not form.is_form:
+            return errors
+        if not form.questions:
+            errors.append("a form needs at least one question")
+        labels = [q.label for q in form.questions]
+        for q in form.questions:
+            if _letters(q.label) not in haystack:
+                errors.append(f"question '{q.label[:60]}' is not in the document: keep its wording")
+            if q.type in ("select_one", "select_multiple") and len(set(q.options)) < 2:
+                errors.append(f"question '{q.label[:60]}': {q.type} needs at least two options")
+            if q.type not in ("select_one", "select_multiple") and q.options:
+                errors.append(f"question '{q.label[:60]}': options are only for select types")
+        if form.entity_key is not None and form.entity_key not in labels:
+            errors.append("entity_key must be the label of one of the questions")
+        return errors
+
+    return check
+
+
 # --- G. propose forms ----------------------------------------------------------------------------
 
 
@@ -136,7 +212,19 @@ class ProposedForm(BaseModel):
 
     def form_schema(self) -> FormSchema:
         return FormSchema(title=self.title, entity_key_field=self.entity_key_field,
-                          fields=self.fields)  # fmt: skip
+                          fields=self.fields, origin="ai")  # fmt: skip
+
+
+class DocumentForm(ProposedForm):
+    """A form taken from an uploaded document (built in code from `ImportedForm`, never asked
+    of the model directly). `data_source` holds the sheet or table name it came from."""
+
+    source: str
+    cut_name: bool = False  # the sheet name hit Excel's 31-character limit
+
+    def form_schema(self) -> FormSchema:
+        return FormSchema(title=self.title, entity_key_field=self.entity_key_field,
+                          fields=self.fields, origin="document", source=self.source)  # fmt: skip
 
 
 class FormsProposal(BaseModel):
@@ -153,15 +241,20 @@ lowercase snake_case, unique in the form. select fields need at least two option
 If indicators count distinct people or households, add an identifier field (text, required, \
 pii: true) and name it in entity_key_field. Add a select_one field for every breakdown an \
 indicator needs (for example sex). Mark names, phone numbers and IDs as pii: true.
-Only ask what the indicators need; keep forms short."""
+Only ask what the indicators need; keep forms short. Do not reuse the keys in `keys_in_use` \
+(forms already taken from the project's documents)."""
 
 
-def check_forms(refs: list[str]) -> Callable[[FormsProposal], list[str]]:
+def check_forms(
+    refs: list[str], keys_in_use: frozenset[str] = frozenset()
+) -> Callable[[FormsProposal], list[str]]:
     def check(proposal: FormsProposal) -> list[str]:
         errors: list[str] = []
         keys = [f.key for f in proposal.forms]
         if len(set(keys)) != len(keys):
             errors.append("form keys must be unique")
+        if taken := sorted(set(keys) & keys_in_use):
+            errors.append(f"form keys {taken} are already used by forms from the documents")
         covered: set[str] = set()
         for form in proposal.forms:
             if not FORM_KEY.match(form.key):

@@ -9,12 +9,14 @@
     --bg: #f6f7f9; --panel: #ffffff; --text: #1d2330; --muted: #677085; --line: #e2e5ea;
     --accent: #2f6fde; --accent-soft: #e7effc; --ok: #1f8a4c; --ok-soft: #e3f4ea;
     --warn: #b26a00; --warn-soft: #fbf0dc; --bad: #c0392b; --bad-soft: #fbe5e2;
+    --grey-soft: #eef0f3;
   }
   @media (prefers-color-scheme: dark) {
     :root:not([data-theme="light"]) {
       --bg: #14171d; --panel: #1c2028; --text: #e6e8ee; --muted: #98a0b3; --line: #2c323d;
       --accent: #6c9cf0; --accent-soft: #233150; --ok: #4cc283; --ok-soft: #1b3326;
       --warn: #e0a440; --warn-soft: #3a2e17; --bad: #ef7a6c; --bad-soft: #3d2220;
+      --grey-soft: #262b35;
     }
   }
   * { box-sizing: border-box; }
@@ -28,23 +30,27 @@
   nav button { border: 0; background: none; color: var(--muted); padding: 7px 12px;
                border-radius: 6px; cursor: pointer; font: inherit; }
   nav button.active { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
-  main { max-width: 1100px; margin: 0 auto; padding: 20px 16px 60px; }
+  main { max-width: 1200px; margin: 0 auto; padding: 20px 16px 60px; }
   section { display: none; } section.active { display: block; }
   .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
            padding: 16px; margin-bottom: 16px; }
   h2 { font-size: 15px; margin: 0 0 12px; } h3 { font-size: 14px; margin: 0 0 8px; }
   .muted { color: var(--muted); } .small { font-size: 12px; }
   .row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
-  .btn { display: inline-block; text-decoration: none; border: 1px solid var(--line); background: var(--panel); color: var(--text);
-               padding: 7px 14px; border-radius: 6px; cursor: pointer; font: inherit; }
-  button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .spacer { flex: 1; }
+  .btn { display: inline-block; text-decoration: none; border: 1px solid var(--line);
+         background: var(--panel); color: var(--text); padding: 7px 14px; border-radius: 6px;
+         cursor: pointer; font: inherit; }
+  .btn.sm { padding: 3px 9px; font-size: 12px; }
+  .btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .btn.danger { color: var(--bad); }
   button:disabled { opacity: .5; cursor: default; }
   input, select, textarea { font: inherit; color: var(--text); background: var(--bg);
                             border: 1px solid var(--line); border-radius: 6px; padding: 6px 8px; }
-  textarea { width: 100%; min-height: 160px; font-family: ui-monospace, Consolas, monospace;
-             font-size: 12px; }
+  textarea { width: 100%; min-height: 80px; }
+  textarea.code { min-height: 160px; font-family: ui-monospace, Consolas, monospace; font-size: 12px; }
   table { width: 100%; border-collapse: collapse; }
-  th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th, td { text-align: left; padding: 7px 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
   th { font-size: 12px; color: var(--muted); font-weight: 600; }
   td input.num { width: 80px; }
   .scroll { overflow-x: auto; }
@@ -53,6 +59,8 @@
   .badge.ok { background: var(--ok-soft); color: var(--ok); }
   .badge.warn { background: var(--warn-soft); color: var(--warn); }
   .badge.bad { background: var(--bad-soft); color: var(--bad); }
+  .badge.grey { background: var(--grey-soft); color: var(--muted); }
+  a.chip { cursor: pointer; text-decoration: none; }
   .msg { padding: 8px 12px; border-radius: 6px; margin-top: 10px; white-space: pre-wrap; }
   .msg.ok { background: var(--ok-soft); color: var(--ok); }
   .msg.bad { background: var(--bad-soft); color: var(--bad); }
@@ -60,18 +68,49 @@
   .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 14px; }
   .card { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 14px; }
   .card .big { font-size: 26px; font-weight: 700; margin: 6px 0 2px; }
-  .bar { height: 8px; background: var(--line); border-radius: 4px; overflow: hidden; margin: 6px 0; }
+  .bar { height: 8px; background: var(--line); border-radius: 4px; overflow: hidden; margin: 6px 0; min-width: 60px; }
   .bar > span { display: block; height: 100%; background: var(--accent); }
+  .bar.ok > span { background: var(--ok); }
   .bd { margin-top: 10px; }
-  .bd .line { display: grid; grid-template-columns: 90px 1fr 70px; gap: 8px; align-items: center;
-              font-size: 12px; }
-  .field { margin-bottom: 10px; } .field label { display: block; font-weight: 600; margin-bottom: 3px; }
-  .field input, .field select { width: 100%; max-width: 360px; }
-  .level { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: .03em;
-           margin: 18px 0 8px; }
+  .bd .line { display: grid; grid-template-columns: 110px 1fr 70px; gap: 8px; align-items: center; font-size: 12px; }
+  .field { margin-bottom: 12px; } .field > label { display: block; font-weight: 600; margin-bottom: 3px; }
+  .field input:not([type=checkbox]):not([type=radio]), .field select { width: 100%; max-width: 420px; }
+  .field .opt { display: block; font-weight: 400; margin: 2px 0; }
+  .form-section { margin: 18px 0 8px; padding-bottom: 4px; border-bottom: 1px solid var(--line);
+                  font-size: 12px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .03em; }
+  .level { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: .03em; margin: 18px 0 8px; }
   blockquote { margin: 4px 0; padding: 4px 10px; border-left: 3px solid var(--line); color: var(--muted); }
   details summary { cursor: pointer; color: var(--accent); font-size: 12px; }
-  @media (max-width: 600px) { nav { margin-left: 0; } .grid { grid-template-columns: 1fr; } }
+  /* form builder */
+  .builder { display: grid; grid-template-columns: 220px minmax(0, 1.25fr) minmax(0, 1fr); gap: 16px; align-items: start; }
+  .form-list button { display: block; width: 100%; text-align: left; border: 1px solid transparent;
+                      background: none; color: var(--text); padding: 8px 10px; border-radius: 8px;
+                      cursor: pointer; font: inherit; margin-bottom: 4px; }
+  .form-list button.active { background: var(--accent-soft); border-color: var(--accent); }
+  .form-list .meta { font-size: 11px; color: var(--muted); }
+  .q { border: 1px solid var(--line); border-radius: 8px; padding: 10px; margin-bottom: 10px; background: var(--bg); }
+  .q .top { display: grid; grid-template-columns: 22px 1fr auto; gap: 8px; align-items: center; }
+  .q .top input { width: 100%; }
+  .q .num-label { color: var(--muted); font-size: 12px; text-align: right; }
+  .q .more { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; margin-top: 8px; font-size: 12px; }
+  .q .more input[type=text], .q .more input[type=number] { padding: 3px 6px; font-size: 12px; }
+  .q .more label { display: inline-flex; gap: 4px; align-items: center; }
+  .q textarea { margin-top: 8px; min-height: 70px; font-size: 13px; }
+  .iconbtn { border: 1px solid var(--line); background: var(--panel); color: var(--text); border-radius: 6px;
+             width: 28px; height: 28px; cursor: pointer; font: inherit; line-height: 1; }
+  .sticky { position: sticky; top: 12px; }
+  .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; margin-bottom: 16px; }
+  .tile { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px;
+          cursor: pointer; text-align: left; font: inherit; color: var(--text); }
+  .tile.active { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent) inset; }
+  .tile .n { font-size: 24px; font-weight: 700; }
+  .tile .l { font-size: 12px; color: var(--muted); }
+  .seg { display: inline-flex; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; }
+  .seg button { border: 0; background: var(--panel); color: var(--muted); padding: 6px 12px; cursor: pointer; font: inherit; }
+  .seg button.active { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+  @media (max-width: 1000px) { .builder { grid-template-columns: 1fr; } .sticky { position: static; } }
+  @media (max-width: 600px) { nav { margin-left: 0; } .grid { grid-template-columns: 1fr; }
+    .q .top { grid-template-columns: 1fr; } .q .num-label { text-align: left; } }
 </style>
 </head>
 <body>
@@ -80,10 +119,11 @@
   <span class="tag">AI proposes · a person approves · the engine calculates</span>
   <nav id="tabs">
     <button data-tab="upload" class="active">1 Upload</button>
-    <button data-tab="review">2 Review &amp; publish</button>
-    <button data-tab="collect">3 Collect</button>
-    <button data-tab="dashboard">4 Dashboard</button>
-    <button data-tab="themes">5 Themes</button>
+    <button data-tab="review">2 Review</button>
+    <button data-tab="forms">3 Forms</button>
+    <button data-tab="collect">4 Collect</button>
+    <button data-tab="dashboard">5 Dashboard</button>
+    <button data-tab="themes">6 Themes</button>
   </nav>
 </header>
 <main>
@@ -92,7 +132,9 @@
   <div class="panel">
     <h2>Upload a results framework</h2>
     <p class="muted">xlsx, csv, docx or digital pdf. Try <code>tests/fixtures/sample_logframe.xlsx</code>.
-      The file is parsed, then the AI drafts results, indicators, forms and calculation rules.</p>
+      The file is parsed, then the AI drafts results, indicators and calculation rules. Forms that
+      are already in your files (for example one sheet per questionnaire) are taken as they are;
+      the AI only designs forms for indicators that none of them covers.</p>
     <div class="row">
       <input type="file" id="files" multiple accept=".xlsx,.xlsm,.csv,.docx,.pdf">
       <button class="btn primary" id="upload-btn">Upload and extract</button>
@@ -104,42 +146,59 @@
 <section id="review">
   <div class="panel">
     <div class="row"><h2 style="margin:0">Draft</h2><span id="draft-state"></span>
-      <span style="flex:1"></span>
+      <span class="spacer"></span>
       <button class="btn" id="reload-draft">Reload</button>
       <button class="btn primary" id="publish-btn">Publish</button></div>
     <div id="publish-out"></div>
   </div>
   <div class="panel"><h3>Results</h3><div id="results" class="tree"></div></div>
   <div class="panel"><h3>Indicators and calculation rules</h3>
-    <p class="muted small">Baseline, target and unit save when you leave the field. Rules are JSON (see README).</p>
+    <p class="muted small">Baseline, target and unit save when you leave the field. Each rule reads one or more forms;
+      open them in the Forms tab to check or edit the questions.</p>
     <div class="scroll"><table id="indicators"></table></div></div>
   <div class="panel"><h3>Open questions</h3><div id="questions"></div></div>
-  <div class="panel"><h3>Forms</h3><div id="forms"></div></div>
+</section>
+
+<section id="forms">
+  <div class="builder">
+    <div class="panel sticky">
+      <div class="row" style="margin-bottom:8px"><h3 style="margin:0">Forms</h3><span class="spacer"></span>
+        <button class="btn sm" id="new-form">+ New</button></div>
+      <div id="form-list" class="form-list"></div>
+    </div>
+    <div class="panel" id="builder-panel"><div class="muted">Pick a form, or create one.</div></div>
+    <div class="panel sticky" id="preview-panel">
+      <h3>Preview</h3><div class="muted small" style="margin-bottom:10px">What data collectors will see.</div>
+      <form id="preview" onsubmit="return false"></form>
+    </div>
+  </div>
 </section>
 
 <section id="collect">
   <div class="panel">
-    <div class="row"><h2 style="margin:0">Fill a form</h2><span style="flex:1"></span>
+    <div class="row"><h2 style="margin:0">Fill a form</h2><span class="spacer"></span>
       <button class="btn" id="seed-btn" title="Adds 30 random valid submissions to every published form">Seed demo data</button></div>
     <div id="seed-out"></div>
-    <div class="row" style="margin-top:12px"><select id="form-pick"></select></div>
+    <div class="row" style="margin-top:12px"><select id="form-pick"></select><span id="form-feeds" class="muted small"></span></div>
     <form id="form-fill" style="margin-top:14px"></form>
     <div id="submit-out"></div>
   </div>
 </section>
 
 <section id="dashboard">
-  <div class="panel row"><h2 style="margin:0">Dashboard</h2><span id="dash-sub" class="muted small"></span>
-    <span style="flex:1"></span>
+  <div class="panel row"><h2 style="margin:0">KPI tracking</h2><span id="dash-sub" class="muted small"></span>
+    <span class="spacer"></span>
+    <div class="seg" id="dash-view"><button data-view="table" class="active">Table</button><button data-view="cards">Cards</button></div>
     <button class="btn" id="reload-dash">Refresh</button>
     <a class="btn" href="/export.csv">Export CSV</a></div>
+  <div id="tiles" class="tiles"></div>
   <div id="dash"></div>
 </section>
 
 <section id="themes">
   <div class="panel row"><h2 style="margin:0">Qualitative themes</h2>
-    <span class="muted small">Open-text fields marked qualitative (never pii). Counts and quotes come from the data, not the AI.</span>
-    <span style="flex:1"></span><button class="btn primary" id="themes-btn">Analyse</button></div>
+    <span class="muted small">Open-text fields marked qualitative (never personal data). Counts and quotes come from the data, not the AI.</span>
+    <span class="spacer"></span><button class="btn primary" id="themes-btn">Analyse</button></div>
   <div id="themes-out"></div>
 </section>
 
@@ -148,30 +207,70 @@
 const $ = (s) => document.querySelector(s);
 const esc = (v) => String(v ?? "").replace(/[&<>"']/g, (c) => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 const fmt = (v) => v == null ? "–" : (typeof v === "number" ? (Number.isInteger(v) ? v.toLocaleString() : v.toLocaleString(undefined, {maximumFractionDigits: 1})) : esc(v));
+const slugify = (t, limit = 40) => { let s = String(t).toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "").slice(0, limit).replace(/_+$/, ""); return s && /^[a-z]/.test(s) ? s : ("f_" + s).replace(/_+$/, ""); };
+const uniqueSlug = (t, taken, limit = 40) => { const base = slugify(t, limit); let s = base, n = 2; while (taken.has(s)) s = `${base.slice(0, limit - 4)}_${n++}`; taken.add(s); return s; };
 
 async function api(method, path, body) {
   const opts = { method, headers: {} };
   if (body instanceof FormData) opts.body = body;
   else if (body !== undefined) { opts.body = JSON.stringify(body); opts.headers["Content-Type"] = "application/json"; }
   const res = await fetch(path, opts);
+  if (res.status === 204) return null;
   const data = res.headers.get("content-type")?.includes("json") ? await res.json() : await res.text();
   if (!res.ok) {
     const e = data?.error || {};
-    const details = (e.details || []).map((d) => typeof d === "string" ? d : JSON.stringify(d)).join("\n");
+    const details = (e.details || []).map((d) => typeof d === "string" ? d : (d.errors ? `${d.form || d.indicator_id}: ${d.errors.join("; ")}` : JSON.stringify(d))).join("\n");
     throw new Error((e.message || res.statusText) + (details ? "\n" + details : ""));
   }
   return data;
 }
 const msg = (el, text, ok) => { el.innerHTML = `<div class="msg ${ok ? "ok" : "bad"}">${esc(text)}</div>`; };
+const formsIn = (defn) => { const out = new Set(); (function walk(o) { if (o && typeof o === "object") for (const [k, v] of Object.entries(o)) { if (k === "form" && typeof v === "string") out.add(v); else walk(v); } })(defn); return [...out]; };
+const originBadge = (s) => s?.origin === "document" ? `<span class="badge ok" title="${esc(s.source || "")}">from your file</span>`
+  : s?.origin === "manual" ? `<span class="badge">built by hand</span>` : `<span class="badge grey">AI-proposed</span>`;
 
 // --- tabs
-const loaders = { review: loadDraft, collect: loadForms, dashboard: loadDash };
+const loaders = { review: loadDraft, forms: loadForms, collect: loadCollect, dashboard: loadDash };
 document.querySelectorAll("#tabs button").forEach((b) => b.onclick = () => showTab(b.dataset.tab));
 function showTab(name) {
   document.querySelectorAll("#tabs button").forEach((b) => b.classList.toggle("active", b.dataset.tab === name));
   document.querySelectorAll("main section").forEach((s) => s.classList.toggle("active", s.id === name));
   try { localStorage.setItem("tab", name); } catch (e) {}
   loaders[name]?.();
+}
+function openForm(key, tab = "forms") { pendingForm = key; showTab(tab); }
+let pendingForm = null;
+
+// --- shared form renderer (Collect tab and the builder preview)
+function formHtml(schema, submitLabel) {
+  let section = null, html = "";
+  for (const f of schema.fields) {
+    if (f.section && f.section !== section) { section = f.section; html += `<div class="form-section">${esc(section)}</div>`; }
+    const req = f.required ? " *" : "", unit = f.unit ? ` (${esc(f.unit)})` : "";
+    const tags = (f.pii ? ' <span class="badge warn">personal</span>' : "") + (schema.entity_key_field === f.id ? ' <span class="badge">identifier</span>' : "");
+    let input;
+    const min = f.constraints?.min ?? "", max = f.constraints?.max ?? "";
+    if (f.type === "select_one") input = (f.options.length > 4)
+      ? `<select name="${esc(f.id)}"><option value=""></option>${f.options.map((o) => `<option value="${esc(o.value)}">${esc(o.label)}</option>`).join("")}</select>`
+      : f.options.map((o) => `<label class="opt"><input type="radio" name="${esc(f.id)}" value="${esc(o.value)}"> ${esc(o.label)}</label>`).join("");
+    else if (f.type === "select_multiple") input = f.options.map((o) => `<label class="opt"><input type="checkbox" name="${esc(f.id)}" value="${esc(o.value)}"> ${esc(o.label)}</label>`).join("");
+    else if (f.type === "integer" || f.type === "decimal") input = `<input type="number" name="${esc(f.id)}" step="${f.type === "integer" ? 1 : "any"}" min="${min}" max="${max}">`;
+    else if (f.type === "date") input = `<input type="date" name="${esc(f.id)}">`;
+    else input = f.qualitative ? `<textarea name="${esc(f.id)}"></textarea>` : `<input name="${esc(f.id)}">`;
+    html += `<div class="field"><label>${esc(f.label)}${unit}${req}${tags}</label>${input}</div>`;
+  }
+  return html + (submitLabel ? `<button class="btn primary" type="submit">${esc(submitLabel)}</button>` : "");
+}
+function readForm(el, schema) {
+  const data = {};
+  for (const f of schema.fields) {
+    const all = [...el.querySelectorAll(`[name="${CSS.escape(f.id)}"]`)];
+    if (f.type === "select_multiple") { const v = all.filter((c) => c.checked).map((c) => c.value); if (v.length) data[f.id] = v; continue; }
+    const v = (all[0]?.type === "radio" ? (all.find((c) => c.checked)?.value || "") : (all[0]?.value || "")).trim();
+    if (v === "") continue;
+    data[f.id] = (f.type === "integer" || f.type === "decimal") ? Number(v) : v;
+  }
+  return data;
 }
 
 // --- 1 upload
@@ -188,13 +287,14 @@ $("#upload-btn").onclick = async () => {
       up = await api("GET", `/upload/${up.id}?ir=false`);
     }
     if (up.status !== "extracted") throw new Error(up.error || `status ${up.status}`);
-    const x = up.extraction || {};
-    const c = x.counts || {};
+    const x = up.extraction || {}, c = x.counts || {};
+    const fromDocs = c.forms_from_documents || 0;
     out.innerHTML = `<div class="msg ok">Draft ready (LLM: ${esc(x.mode || "?")}). ` +
-      `${fmt(c.results)} results · ${fmt(c.indicators)} indicators · ${fmt(c.forms)} forms · ` +
-      `${fmt(c.definitions)} rules · ${fmt(c.open_questions)} open questions.</div>` +
+      `${fmt(c.results)} results · ${fmt(c.indicators)} indicators · ${fmt(c.definitions)} rules · ${fmt(c.open_questions)} open questions.\n` +
+      `${fmt(c.forms)} forms: ${fmt(fromDocs)} taken from your file(s), ${fmt(c.forms - fromDocs)} proposed by the AI.</div>` +
       (x.problems?.length ? `<div class="msg bad">${esc(x.problems.join("\n"))}</div>` : "") +
-      `<p><button class="btn primary" onclick="showTab('review')">Review the draft →</button></p>`;
+      `<p class="row"><button class="btn primary" onclick="showTab('forms')">Preview the forms →</button>
+       <button class="btn" onclick="showTab('review')">Review indicators →</button></p>`;
   } catch (e) { msg(out, e.message, false); }
   $("#upload-btn").disabled = false;
 };
@@ -203,30 +303,34 @@ $("#upload-btn").onclick = async () => {
 let draft = null;
 async function loadDraft() {
   try { draft = await api("GET", "/draft"); } catch (e) { return msg($("#publish-out"), e.message, false); }
-  const published = draft.forms.some((f) => f.status === "published");
-  $("#draft-state").innerHTML = published ? `<span class="badge ok">published</span>` :
+  const published = draft.indicators.some((i) => i.status === "published");
+  const pendingForms = draft.forms.filter((f) => f.status === "draft").length;
+  $("#draft-state").innerHTML = published ? `<span class="badge ok">published</span>` + (pendingForms ? ` <span class="badge warn">${pendingForms} new form(s) to publish</span>` : "") :
     (draft.indicators.length ? `<span class="badge warn">draft</span>` : `<span class="muted">empty: upload a framework first</span>`);
-  $("#publish-btn").disabled = published || !draft.indicators.length;
-  // results tree
+  $("#publish-btn").disabled = !draft.indicators.length || (published && !pendingForms && !draft.definitions.some((d) => d.status === "draft"));
   const kids = {}; draft.results.forEach((r) => (kids[r.parent_id || ""] ||= []).push(r));
   const walk = (pid, depth) => (kids[pid] || []).map((r) =>
     `<div style="padding-left:${depth * 22}px"><span class="badge">${esc(r.level_name)}</span> <b>${esc(r.code)}</b> ${esc(r.statement)}</div>` + walk(r.id, depth + 1)).join("");
   $("#results").innerHTML = walk("", 0) || `<span class="muted">none</span>`;
-  // indicators + definitions
   const defs = Object.fromEntries(draft.definitions.map((d) => [d.indicator_id, d]));
   const results = Object.fromEntries(draft.results.map((r) => [r.id, r]));
-  $("#indicators").innerHTML = `<tr><th>Result</th><th>Indicator</th><th>Kind</th><th>Unit</th><th>Baseline</th><th>Target</th><th>Rule</th></tr>` +
+  const titles = Object.fromEntries(draft.forms.map((f) => [f.key, f.title]));
+  $("#indicators").innerHTML = `<tr><th>Code</th><th>Indicator</th><th>Kind</th><th>Unit</th><th>Baseline</th><th>Target</th><th>Collected with</th><th>Rule</th></tr>` +
     draft.indicators.map((i) => {
       const d = defs[i.id], ro = i.status === "published" ? "disabled" : "";
       const badge = !d ? `<span class="badge bad">no rule</span>` : d.valid ? `<span class="badge ok">valid</span>` : `<span class="badge bad">${d.errors.length} problem(s)</span>`;
-      return `<tr><td class="small muted">${esc(results[i.result_id]?.code || results[i.result_id]?.level_name)}</td>
-        <td>${esc(i.name)}</td><td>${esc(i.kind)}</td>
+      const forms = d ? formsIn(d.definition).map((k) => `<a class="badge chip" onclick="openForm('${esc(k)}')">${esc(titles[k] || k)}</a>`).join(" ") : "";
+      return `<tr><td class="small muted">${esc(i.code || results[i.result_id]?.code)}</td>
+        <td>${esc(i.name)}<div class="small muted">${esc(results[i.result_id]?.level_name)}</div></td><td>${esc(i.kind)}</td>
         <td><input class="num" data-ind="${i.id}" data-k="unit" value="${esc(i.unit)}" ${ro}></td>
         <td><input class="num" type="number" step="any" data-ind="${i.id}" data-k="baseline" value="${esc(i.baseline)}" ${ro}></td>
         <td><input class="num" type="number" step="any" data-ind="${i.id}" data-k="target" value="${esc(i.target)}" ${ro}></td>
+        <td>${forms || '<span class="muted small">–</span>'}</td>
         <td>${badge}${d && !d.valid ? `<div class="small" style="color:var(--bad)">${esc(d.errors.join("; "))}</div>` : ""}
-          <details><summary>edit rule</summary><textarea data-def="${i.id}">${esc(JSON.stringify(d?.definition || {kind: i.kind || "count"}, null, 2))}</textarea>
-          <button class="btn" data-save-def="${i.id}">Save rule</button><div data-def-out="${i.id}"></div></details></td></tr>`;
+          <details><summary>edit rule</summary><textarea class="code" data-def="${i.id}">${esc(JSON.stringify(d?.definition || {kind: i.kind || "count"}, null, 2))}</textarea>
+          <div class="row"><button class="btn sm" data-save-def="${i.id}">Save rule</button>
+          ${d && !ro ? `<button class="btn sm danger" data-drop-def="${i.id}" title="Publish this indicator without a rule (shown as not computable)">Remove rule</button>` : ""}</div>
+          <div data-def-out="${i.id}"></div></details></td></tr>`;
     }).join("");
   document.querySelectorAll("input[data-ind]").forEach((el) => el.onchange = async () => {
     const k = el.dataset.k, v = el.value.trim();
@@ -238,10 +342,12 @@ async function loadDraft() {
     const id = b.dataset.saveDef, out = document.querySelector(`[data-def-out="${id}"]`);
     let defn; try { defn = JSON.parse(document.querySelector(`[data-def="${id}"]`).value); } catch (e) { return msg(out, "Not valid JSON: " + e.message, false); }
     try { const r = await api("PUT", `/draft/definitions/${id}`, {definition: defn});
-      if (r.valid) { await loadDraft(); } else msg(out, "Saved with problems:\n" + r.errors.join("\n"), false);
+      if (r.valid) await loadDraft(); else msg(out, "Saved with problems:\n" + r.errors.join("\n"), false);
     } catch (e) { msg(out, e.message, false); }
   });
-  // open questions
+  document.querySelectorAll("button[data-drop-def]").forEach((b) => b.onclick = async () => {
+    try { await api("DELETE", `/draft/definitions/${b.dataset.dropDef}`); loadDraft(); } catch (e) { alert(e.message); }
+  });
   const names = Object.fromEntries(draft.indicators.map((i) => [i.id, i.name]));
   $("#questions").innerHTML = draft.open_questions.map((q) => `<div class="field"><label>${esc(q.question)}</label>
     <div class="small muted">${esc(names[q.indicator_id] || "")}</div>
@@ -250,107 +356,236 @@ async function loadDraft() {
   document.querySelectorAll("input[data-q]").forEach((el) => el.onchange = async () => {
     try { await api("PATCH", `/draft/open_questions/${el.dataset.q}`, {answer: el.value.trim() || null}); loadDraft(); } catch (e) { alert(e.message); }
   });
-  // forms
-  $("#forms").innerHTML = draft.forms.map((f) => `<div style="margin-bottom:12px"><b>${esc(f.title)}</b> <code class="small">${esc(f.key)}</code>
-    <span class="badge ${f.status === "published" ? "ok" : "warn"}">${esc(f.status)}</span>
-    <div class="small">${f.schema.fields.map((x) => `<span class="badge" title="${esc(x.label)}">${esc(x.id)}: ${esc(x.type)}${x.pii ? " · pii" : ""}${x.qualitative ? " · open text" : ""}</span>`).join(" ")}</div>
-    ${f.status === "published" ? "" : `<details><summary>edit form</summary><textarea data-form="${esc(f.key)}">${esc(JSON.stringify(f.schema, null, 2))}</textarea>
-    <button class="btn" data-save-form="${esc(f.key)}">Save form</button><div data-form-out="${esc(f.key)}"></div></details>`}</div>`).join("") || `<span class="muted">none</span>`;
-  document.querySelectorAll("button[data-save-form]").forEach((b) => b.onclick = async () => {
-    const key = b.dataset.saveForm, out = document.querySelector(`[data-form-out="${key}"]`);
-    let schema; try { schema = JSON.parse(document.querySelector(`[data-form="${key}"]`).value); } catch (e) { return msg(out, "Not valid JSON: " + e.message, false); }
-    try { await api("PATCH", `/draft/forms/${key}`, {schema}); await loadDraft(); } catch (e) { msg(out, e.message, false); }
-  });
 }
 $("#reload-draft").onclick = loadDraft;
 $("#publish-btn").onclick = async () => {
   try {
     const r = await api("POST", "/publish");
     msg($("#publish-out"), `Published ${r.forms} forms and ${r.indicators} indicators.` +
+      (r.without_definition.length ? ` ${r.without_definition.length} indicator(s) have no rule and will show as not computable.` : "") +
       (r.unanswered_questions ? ` ${r.unanswered_questions} open question(s) left unanswered.` : ""), true);
     loadDraft();
   } catch (e) { msg($("#publish-out"), e.message, false); }
 };
 
-// --- 3 collect
+// --- 3 forms: builder + preview
+const TYPES = [["text", "Text"], ["integer", "Whole number"], ["decimal", "Decimal number"], ["select_one", "Choose one"], ["select_multiple", "Choose several"], ["date", "Date"]];
+let allForms = [], feeds = {}, edit = null;  // edit = {key, status, schema, dirty}
 async function loadForms() {
+  const d = await api("GET", "/draft");
+  allForms = d.forms;
+  const names = Object.fromEntries(d.indicators.map((i) => [i.id, i.name]));
+  feeds = {};
+  for (const def of d.definitions) for (const k of formsIn(def.definition)) (feeds[k] ||= []).push(names[def.indicator_id]);
+  const want = pendingForm || edit?.key || allForms[0]?.key; pendingForm = null;
+  renderFormList();
+  if (want && allForms.some((f) => f.key === want) && !(edit && edit.key === want && edit.dirty)) pickForm(want);
+  else if (!allForms.length) { $("#builder-panel").innerHTML = `<div class="muted">No forms yet. Upload a framework, or click “+ New”.</div>`; $("#preview").innerHTML = ""; }
+}
+function renderFormList() {
+  $("#form-list").innerHTML = allForms.map((f) => `<button data-key="${esc(f.key)}" class="${edit?.key === f.key ? "active" : ""}">
+    <div>${esc(f.title)}</div><div class="meta">${f.schema.fields.length} questions · ${(feeds[f.key] || []).length} indicator(s) ·
+    ${f.status === "published" ? "published" : "draft"}</div><div>${originBadge(f.schema)}</div></button>`).join("") || `<div class="muted small">none</div>`;
+  document.querySelectorAll("#form-list button").forEach((b) => b.onclick = () => {
+    if (edit?.dirty && !confirm("Discard unsaved changes to this form?")) return;
+    pickForm(b.dataset.key);
+  });
+}
+function pickForm(key) {
+  const f = allForms.find((x) => x.key === key);
+  edit = { key, status: f.status, schema: structuredClone(f.schema), dirty: false };
+  renderFormList(); renderBuilder(); renderPreview();
+}
+function renderPreview() { $("#preview").innerHTML = edit ? formHtml(edit.schema) : ""; }
+function touch() { edit.dirty = true; $("#save-form") && ($("#save-form").disabled = false); $("#form-out").innerHTML = ""; renderPreview(); }
+function renderBuilder() {
+  const s = edit.schema, locked = edit.status === "published", dis = locked ? "disabled" : "";
+  const keyable = s.fields.filter((f) => f.type === "text" || f.type === "integer");
+  $("#builder-panel").innerHTML = `
+    <div class="row" style="margin-bottom:10px">${originBadge(s)}<span class="badge ${locked ? "ok" : "warn"}">${locked ? "published" : "draft"}</span>
+      ${s.source ? `<span class="muted small">${esc(s.source)}</span>` : ""}</div>
+    ${locked ? `<div class="msg ok" style="margin:0 0 12px">This form is published and collecting data, so it can no longer change. Create a new form for new questions.</div>` : ""}
+    <div class="field"><label>Form title</label><input id="b-title" value="${esc(s.title)}" ${dis}></div>
+    <div class="field"><label>Identifier question <span class="muted small">(used to count distinct people or things)</span></label>
+      <select id="b-key" ${dis}><option value="">None: count every record</option>${keyable.map((f) => `<option value="${esc(f.id)}" ${s.entity_key_field === f.id ? "selected" : ""}>${esc(f.label)}</option>`).join("")}</select></div>
+    <div class="small muted" style="margin-bottom:12px">Feeds: ${(feeds[edit.key] || []).map(esc).join("; ") || "no indicator yet"}</div>
+    <div id="b-fields">${s.fields.map((f, i) => questionHtml(f, i, s.fields.length, dis)).join("")}</div>
+    ${locked ? "" : `<button class="btn" id="add-q">+ Add question</button>`}
+    <div class="row" style="margin-top:16px">
+      ${locked ? "" : `<button class="btn primary" id="save-form" ${edit.dirty ? "" : "disabled"}>Save form</button>
+      <button class="btn" id="discard-form">Discard changes</button><span class="spacer"></span>
+      <button class="btn danger" id="delete-form">Delete form</button>`}</div>
+    <div id="form-out"></div>`;
+  if (locked) return;
+  $("#b-title").oninput = (e) => { s.title = e.target.value; touch(); };
+  $("#b-key").onchange = (e) => { s.entity_key_field = e.target.value || null; touch(); };
+  $("#add-q").onclick = () => { s.fields.push({ id: uniqueSlug("question", new Set(s.fields.map((f) => f.id))), type: "text", label: "", required: false, options: [], _new: true }); touch(); renderBuilder();
+    document.querySelector(`#b-fields .q:last-child input[data-k=label]`)?.focus(); };
+  $("#save-form").onclick = saveForm;
+  $("#discard-form").onclick = () => pickForm(edit.key);
+  $("#delete-form").onclick = async () => {
+    if (!confirm(`Delete the form “${s.title}”?`)) return;
+    try { await api("DELETE", `/draft/forms/${edit.key}`); edit = null; loadForms(); } catch (e) { msg($("#form-out"), e.message, false); }
+  };
+  document.querySelectorAll("#b-fields .q").forEach((card) => {
+    const i = Number(card.dataset.i), f = s.fields[i];
+    card.querySelectorAll("[data-k]").forEach((el) => {
+      const k = el.dataset.k;
+      const handler = () => {
+        if (k === "label") { f.label = el.value; if (f._new) { const taken = new Set(s.fields.filter((x) => x !== f).map((x) => x.id)); f.id = uniqueSlug(f.label || "question", taken); card.querySelector("[data-k=id]").value = f.id; } }
+        else if (k === "id") { f.id = el.value.trim(); f._new = false; }
+        else if (k === "type") { f.type = el.value; if (!f.type.startsWith("select")) f.options = []; if (!["integer", "decimal"].includes(f.type)) { delete f.constraints; delete f.unit; } if (f.type !== "text") f.qualitative = false; touch(); renderBuilder(); return; }
+        else if (["required", "pii", "qualitative"].includes(k)) f[k] = el.checked;
+        else if (k === "options") { const values = new Set(); const old = Object.fromEntries((f.options || []).map((o) => [o.label, o.value]));
+          f.options = [...new Set(el.value.split("\n").map((l) => l.trim()).filter(Boolean))].map((label) => { const v = old[label] && !values.has(old[label]) ? old[label] : uniqueSlug(label, values); values.add(v); return { value: v, label }; }); }
+        else if (k === "min" || k === "max") { const v = el.value === "" ? null : Number(el.value); f.constraints = { ...(f.constraints || {}), [k]: v }; if (f.constraints.min == null && f.constraints.max == null) delete f.constraints; }
+        else if (k === "unit" || k === "section") f[k] = el.value.trim() || null;
+        touch();
+      };
+      el.addEventListener(el.tagName === "SELECT" || el.type === "checkbox" ? "change" : "input", handler);
+    });
+    card.querySelectorAll("[data-act]").forEach((b) => b.onclick = () => {
+      const act = b.dataset.act;
+      if (act === "up" && i > 0) [s.fields[i - 1], s.fields[i]] = [s.fields[i], s.fields[i - 1]];
+      if (act === "down" && i < s.fields.length - 1) [s.fields[i + 1], s.fields[i]] = [s.fields[i], s.fields[i + 1]];
+      if (act === "del") { s.fields.splice(i, 1); if (s.entity_key_field === f.id) s.entity_key_field = null; }
+      touch(); renderBuilder();
+    });
+  });
+}
+function questionHtml(f, i, n, dis) {
+  const numeric = f.type === "integer" || f.type === "decimal";
+  return `<div class="q" data-i="${i}">
+    <div class="top"><span class="num-label">${i + 1}</span>
+      <input data-k="label" value="${esc(f.label)}" placeholder="Question" ${dis}>
+      <span class="row" style="gap:4px">${dis ? "" : `<button class="iconbtn" data-act="up" title="Move up" ${i === 0 ? "disabled" : ""}>↑</button>
+        <button class="iconbtn" data-act="down" title="Move down" ${i === n - 1 ? "disabled" : ""}>↓</button>
+        <button class="iconbtn" data-act="del" title="Remove">✕</button>`}</span></div>
+    <div class="more">
+      <select data-k="type" ${dis}>${TYPES.map(([v, l]) => `<option value="${v}" ${f.type === v ? "selected" : ""}>${l}</option>`).join("")}</select>
+      <label><input type="checkbox" data-k="required" ${f.required ? "checked" : ""} ${dis}> required</label>
+      <label title="Names, phone numbers, IDs: never sent to the AI or exported"><input type="checkbox" data-k="pii" ${f.pii ? "checked" : ""} ${dis}> personal data</label>
+      ${f.type === "text" ? `<label title="Included in the qualitative theme analysis"><input type="checkbox" data-k="qualitative" ${f.qualitative ? "checked" : ""} ${dis}> open text for themes</label>` : ""}
+      ${numeric ? `<label>min <input type="number" step="any" style="width:70px" data-k="min" value="${esc(f.constraints?.min)}" ${dis}></label>
+        <label>max <input type="number" step="any" style="width:70px" data-k="max" value="${esc(f.constraints?.max)}" ${dis}></label>
+        <label>unit <input type="text" style="width:70px" data-k="unit" value="${esc(f.unit)}" ${dis}></label>` : ""}
+      <label>section <input type="text" style="width:140px" data-k="section" value="${esc(f.section)}" ${dis}></label>
+      <label class="muted">id <input type="text" style="width:150px" data-k="id" value="${esc(f.id)}" ${dis}></label>
+    </div>
+    ${f.type.startsWith("select") ? `<textarea data-k="options" placeholder="One option per line" ${dis}>${esc((f.options || []).map((o) => o.label).join("\n"))}</textarea>` : ""}
+  </div>`;
+}
+async function saveForm() {
+  const schema = structuredClone(edit.schema);
+  schema.fields = schema.fields.map((f) => Object.fromEntries(Object.entries(f).filter(([k]) => !k.startsWith("_"))));
+  try {
+    const saved = await api("PATCH", `/draft/forms/${edit.key}`, { schema });
+    const idx = allForms.findIndex((f) => f.key === edit.key); allForms[idx] = saved;
+    edit.dirty = false; edit.schema.fields.forEach((f) => delete f._new);
+    renderFormList(); renderBuilder(); msg($("#form-out"), "Saved.", true);
+  } catch (e) { msg($("#form-out"), e.message, false); }
+}
+$("#new-form").onclick = async () => {
+  if (edit?.dirty && !confirm("Discard unsaved changes to this form?")) return;
+  try { const f = await api("POST", "/draft/forms", { title: "New form" }); pendingForm = f.key; edit = null; await loadForms(); $("#b-title")?.select(); }
+  catch (e) { alert(e.message); }
+};
+
+// --- 4 collect
+async function loadCollect() {
   const forms = (await api("GET", "/forms")).filter((f) => f.status === "published");
-  const pick = $("#form-pick"), current = pick.value;
+  const pick = $("#form-pick"), current = pendingForm || pick.value; pendingForm = null;
   pick.innerHTML = forms.length ? forms.map((f) => `<option value="${esc(f.key)}">${esc(f.title)} (${f.submissions})</option>`).join("")
     : `<option value="">No published forms: publish the draft first</option>`;
   if (forms.some((f) => f.key === current)) pick.value = current;
-  renderForm();
+  renderCollect();
 }
-async function renderForm() {
+async function renderCollect() {
   const key = $("#form-pick").value, el = $("#form-fill");
-  if (!key) { el.innerHTML = ""; return; }
+  if (!key) { el.innerHTML = ""; $("#form-feeds").textContent = ""; return; }
   const form = await api("GET", `/forms/${key}`);
-  el.innerHTML = form.schema.fields.map((f) => {
-    const req = f.required ? " *" : "", unit = f.unit ? ` (${esc(f.unit)})` : "";
-    let input;
-    if (f.type === "select_one") input = `<select name="${f.id}"><option value=""></option>${f.options.map((o) => `<option value="${esc(o.value)}">${esc(o.label)}</option>`).join("")}</select>`;
-    else if (f.type === "select_multiple") input = f.options.map((o) => `<label style="font-weight:400"><input type="checkbox" name="${f.id}" value="${esc(o.value)}"> ${esc(o.label)}</label>`).join(" ");
-    else if (f.type === "integer" || f.type === "decimal") input = `<input type="number" name="${f.id}" step="${f.type === "integer" ? 1 : "any"}">`;
-    else if (f.type === "date") input = `<input type="date" name="${f.id}">`;
-    else input = `<input name="${f.id}">`;
-    return `<div class="field"><label>${esc(f.label)}${unit}${req}${f.pii ? ' <span class="badge warn">pii</span>' : ""}</label>${input}</div>`;
-  }).join("") + `<button class="btn primary" type="submit">Submit</button>`;
+  const dash = await api("GET", "/dashboard");
+  const fed = dash.indicators.filter((i) => i.forms.some((f) => f.key === key)).map((i) => i.code || i.name);
+  $("#form-feeds").textContent = fed.length ? `Feeds ${fed.length} KPI(s): ${fed.join(", ")}` : "";
+  el.innerHTML = formHtml(form.schema, "Submit");
   el.onsubmit = async (ev) => {
     ev.preventDefault();
-    const data = {};
-    for (const f of form.schema.fields) {
-      if (f.type === "select_multiple") { const v = [...el.querySelectorAll(`[name="${f.id}"]:checked`)].map((c) => c.value); if (v.length) data[f.id] = v; continue; }
-      const v = el.elements[f.id].value.trim(); if (v === "") continue;
-      data[f.id] = (f.type === "integer" || f.type === "decimal") ? Number(v) : v;
-    }
-    try { await api("POST", `/forms/${key}/submissions`, {data}); msg($("#submit-out"), "Saved.", true); el.reset(); loadForms(); }
+    try { await api("POST", `/forms/${key}/submissions`, { data: readForm(el, form.schema) }); msg($("#submit-out"), "Saved.", true); el.reset(); loadCollect(); }
     catch (e) { msg($("#submit-out"), e.message, false); }
   };
 }
-$("#form-pick").onchange = renderForm;
+$("#form-pick").onchange = renderCollect;
 $("#seed-btn").onclick = async () => {
   try { const r = await api("POST", "/demo/seed?per_form=30");
     const n = Object.keys(r.added).length;
-    msg($("#seed-out"), n ? `Added 30 submissions to each of ${n} forms.` : "No published forms yet.", n > 0); loadForms();
+    msg($("#seed-out"), n ? `Added 30 submissions to each of ${n} forms.` : "No published forms yet.", n > 0); loadCollect();
   } catch (e) { msg($("#seed-out"), e.message, false); }
 };
 
-// --- 4 dashboard
-async function loadDash() {
-  const d = await api("GET", "/dashboard"), el = $("#dash");
+// --- 5 dashboard: KPI tracking
+const TRACK = { achieved: ["Achieved", "ok"], in_progress: ["In progress", ""], not_started: ["Not started", "warn"], no_target: ["No target", "grey"], not_computable: ["Not computable", "bad"] };
+let dashData = null, dashFilter = null, dashView = "table";
+try { dashView = localStorage.getItem("dashView") || "table"; } catch (e) {}
+async function loadDash() { dashData = await api("GET", "/dashboard"); renderDash(); }
+function renderDash() {
+  const d = dashData, el = $("#dash");
+  document.querySelectorAll("#dash-view button").forEach((b) => b.classList.toggle("active", b.dataset.view === dashView));
   const total = Object.values(d.submissions).reduce((a, b) => a + b, 0);
-  $("#dash-sub").textContent = `${d.indicators.length} indicators · ${total} submissions`;
-  if (!d.published) { el.innerHTML = `<div class="panel muted">Nothing published yet.</div>`; return; }
-  const groups = [];
-  for (const i of d.indicators) {
-    const key = i.result?.id || "";
-    let g = groups.find((x) => x.key === key);
-    if (!g) groups.push(g = { key, result: i.result, items: [] });
-    g.items.push(i);
-  }
-  el.innerHTML = groups.map((g) => `<div class="level">${esc(g.result?.level_name)} ${esc(g.result?.code)} · ${esc(g.result?.statement)}</div>
-    <div class="grid">${g.items.map(card).join("")}</div>`).join("");
+  $("#dash-sub").textContent = `${d.summary.total} KPIs · ${total} submissions`;
+  if (!d.published) { $("#tiles").innerHTML = ""; el.innerHTML = `<div class="panel muted">Nothing published yet.</div>`; return; }
+  $("#tiles").innerHTML = `<button class="tile ${dashFilter ? "" : "active"}" data-f=""><div class="n">${d.summary.total}</div><div class="l">All KPIs</div></button>` +
+    Object.entries(TRACK).filter(([k]) => k !== "no_target" || d.summary.no_target).map(([k, [label]]) =>
+      `<button class="tile ${dashFilter === k ? "active" : ""}" data-f="${k}"><div class="n">${d.summary[k]}</div><div class="l">${label}</div></button>`).join("");
+  document.querySelectorAll("#tiles .tile").forEach((t) => t.onclick = () => { dashFilter = t.dataset.f || null; renderDash(); });
+  const rows = d.indicators.filter((i) => !dashFilter || i.track === dashFilter);
+  if (!rows.length) { el.innerHTML = `<div class="panel muted">No KPI in this group.</div>`; return; }
+  el.innerHTML = dashView === "table" ? kpiTable(rows) : kpiCards(rows);
 }
-function card(i) {
-  const pct = i.progress_pct == null ? null : Math.max(0, Math.min(100, i.progress_pct));
-  const unit = i.kind === "ratio" ? "%" : (i.unit && i.unit !== "%" ? " " + esc(i.unit) : "");
-  const actual = i.kind === "milestone" && i.status === "ok" ? (i.actual ? "Achieved" : "Not yet") : fmt(i.actual) + (i.actual == null ? "" : unit);
-  const status = i.status === "ok" ? "" : `<div class="msg bad small">Not computable: ${esc(i.reason)}</div>`;
-  const comp = i.components ? `<div class="small muted">${fmt(i.components.numerator)} of ${fmt(i.components.denominator)}</div>` : "";
-  const bds = i.breakdowns.map((b) => {
+document.querySelectorAll("#dash-view button").forEach((b) => b.onclick = () => { dashView = b.dataset.view; try { localStorage.setItem("dashView", dashView); } catch (e) {} renderDash(); });
+const trackChip = (i) => `<span class="badge ${TRACK[i.track][1]}" ${i.reason ? `title="${esc(i.reason)}"` : ""}>${TRACK[i.track][0]}</span>`;
+const formChips = (i) => i.forms.map((f) => `<a class="badge chip ${f.submissions ? "" : "grey"}" onclick="openForm('${esc(f.key)}','collect')" title="Open in Collect">${esc(f.title)} · ${f.submissions}</a>`).join(" ") || `<span class="muted small">no form</span>`;
+function actualText(i) {
+  const unit = i.kind === "ratio" ? "%" : (i.unit && !["%", "#"].includes(i.unit) ? " " + esc(i.unit) : "");
+  if (i.status !== "ok") return "–";
+  if (i.kind === "milestone") return i.actual ? "Done" : "Not yet";
+  return fmt(i.actual) + unit;
+}
+function progressBar(i) {
+  if (i.progress_pct == null) return `<span class="muted small">–</span>`;
+  const pct = Math.max(0, Math.min(100, i.progress_pct));
+  return `<div class="bar ${i.track === "achieved" ? "ok" : ""}"><span style="width:${pct}%"></span></div><div class="small muted">${fmt(i.progress_pct)}%</div>`;
+}
+function breakdowns(i) {
+  return i.breakdowns.map((b) => {
     const max = Math.max(1, ...b.values.map((v) => Math.abs(v.actual || 0)));
     return `<div class="bd"><div class="small muted">by ${esc(b.label)}</div>${b.values.map((v) =>
       `<div class="line"><span>${esc(v.label)}</span><div class="bar"><span style="width:${(Math.abs(v.actual || 0) / max * 100).toFixed(1)}%"></span></div><span>${fmt(v.actual)}</span></div>`).join("")}</div>`;
   }).join("");
-  return `<div class="card"><div class="small muted">${esc(i.code)} ${esc(i.kind)} · ${esc(i.data_source)}</div>
-    <b>${esc(i.name)}</b><div class="big">${actual}</div>${comp}
-    <div class="small muted">baseline ${fmt(i.baseline)} → target ${fmt(i.target)}${pct == null ? "" : ` · ${fmt(i.progress_pct)}% of the way`}</div>
-    ${pct == null ? "" : `<div class="bar"><span style="width:${pct}%"></span></div>`}
-    <div class="small muted">${fmt(i.records)} record(s)</div>${status}${bds}</div>`;
+}
+function kpiTable(rows) {
+  return `<div class="panel scroll"><table><tr><th>Code</th><th>KPI</th><th>Collected with</th><th>Baseline</th><th>Target</th><th>Actual</th><th style="min-width:110px">Progress</th><th>Status</th></tr>` +
+    rows.map((i) => `<tr><td class="small muted">${esc(i.code)}</td>
+      <td>${esc(i.name)}<div class="small muted">${esc(i.result?.level_name)}${i.frequency ? " · " + esc(i.frequency) : ""}</div>
+        ${i.status !== "ok" ? `<div class="small" style="color:var(--bad)">${esc(i.reason)}</div>` : ""}
+        ${i.components ? `<div class="small muted">${fmt(i.components.numerator)} of ${fmt(i.components.denominator)}</div>` : ""}
+        ${i.breakdowns.length ? `<details><summary>breakdowns</summary>${breakdowns(i)}</details>` : ""}</td>
+      <td>${formChips(i)}</td><td>${fmt(i.baseline)}</td><td>${fmt(i.target)}</td><td><b>${actualText(i)}</b></td>
+      <td>${progressBar(i)}</td><td>${trackChip(i)}</td></tr>`).join("") + `</table></div>`;
+}
+function kpiCards(rows) {
+  const groups = [];
+  for (const i of rows) { const key = i.result?.id || ""; let g = groups.find((x) => x.key === key); if (!g) groups.push(g = { key, result: i.result, items: [] }); g.items.push(i); }
+  return groups.map((g) => `<div class="level">${esc(g.result?.level_name)} ${esc(g.result?.code)} · ${esc(g.result?.statement)}</div>
+    <div class="grid">${g.items.map((i) => `<div class="card"><div class="row small muted"><span>${esc(i.code)} ${esc(i.kind)}</span><span class="spacer"></span>${trackChip(i)}</div>
+      <b>${esc(i.name)}</b><div class="big">${actualText(i)}</div>
+      ${i.components ? `<div class="small muted">${fmt(i.components.numerator)} of ${fmt(i.components.denominator)}</div>` : ""}
+      <div class="small muted">baseline ${fmt(i.baseline)} → target ${fmt(i.target)}</div>${progressBar(i)}
+      <div class="small" style="margin-top:6px">Collected with: ${formChips(i)}</div>
+      ${i.status !== "ok" ? `<div class="msg bad small">Not computable: ${esc(i.reason)}</div>` : ""}${breakdowns(i)}</div>`).join("")}</div>`).join("");
 }
 $("#reload-dash").onclick = loadDash;
 
-// --- 5 themes
+// --- 6 themes
 $("#themes-btn").onclick = async () => {
   const out = $("#themes-out"); $("#themes-btn").disabled = true;
   out.innerHTML = `<div class="panel muted">Analysing…</div>`;
@@ -367,6 +602,7 @@ $("#themes-btn").onclick = async () => {
   $("#themes-btn").disabled = false;
 };
 
+window.addEventListener("beforeunload", (e) => { if (edit?.dirty) { e.preventDefault(); e.returnValue = ""; } });
 let start = "upload"; try { start = localStorage.getItem("tab") || "upload"; } catch (e) {}
 showTab(start);
 </script>

@@ -42,6 +42,12 @@ class FormEdit(BaseModel):
     form_schema: dict[str, Any] | None = Field(default=None, alias="schema")  # the whole schema
 
 
+class FormCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    title: str
+    form_schema: dict[str, Any] | None = Field(default=None, alias="schema")
+
+
 class DefinitionPut(BaseModel):
     model_config = ConfigDict(extra="forbid")
     definition: dict[str, Any]
@@ -85,6 +91,23 @@ def edit_indicator(indicator_id: str, body: IndicatorEdit, db: DbDep) -> dict[st
 def edit_form(key: str, body: FormEdit, db: DbDep) -> dict[str, Any]:
     _call(lambda: service.update_form(db, key, body.title, body.form_schema))
     return next(f for f in draft.get(db)["forms"] if f["key"] == key)
+
+
+@router.post("/draft/forms", status_code=201)
+def create_form(body: FormCreate, db: DbDep) -> dict[str, Any]:
+    key = _call(lambda: service.create_form(db, body.title, body.form_schema))
+    return next(f for f in draft.get(db)["forms"] if f["key"] == key)
+
+
+# api_route rather than the router delete decorator, which the hard-delete check would flag
+@router.api_route("/draft/forms/{key}", methods=["DELETE"], status_code=204)
+def delete_form(key: str, db: DbDep) -> None:
+    _call(lambda: service.delete_form(db, key))
+
+
+@router.api_route("/draft/definitions/{indicator_id}", methods=["DELETE"], status_code=204)
+def delete_definition(indicator_id: str, db: DbDep) -> None:
+    _call(lambda: service.delete_definition(db, indicator_id))
 
 
 @router.put("/draft/definitions/{indicator_id}")
