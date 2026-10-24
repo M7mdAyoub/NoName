@@ -1,0 +1,4 @@
+* text=auto
+*.sql text eol=lf
+*.lock text eol=lf
+*.py text eol=lf
