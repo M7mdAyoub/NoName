@@ -8,7 +8,12 @@ Development projects define their KPIs in text-based Results Frameworks, but tra
 
 ## Who It's For
 
-Any organization that runs projects against a Results Framework: NGOs, consulting firms, companies, public bodies, donors and implementing agencies. One organization can run many projects, each with its own framework, donors and reporting cycle.
+Any organization that runs projects against a Results Framework: NGOs, consulting firms, companies, public bodies, donors and implementing agencies.
+
+- **Organization → projects:** each organization runs as many projects as it needs, each with its own framework, donors and reporting cycle.
+- **Project → components:** a project can have several parts (municipalities, countries, workstreams), each with its own framework and its own team.
+
+For example, ENABEL is **one project** of the company running it, with two components (the Sahel Horan and Ramtha municipalities), each with its own framework. ENABEL is only an example of the output to reach: everything that was built by hand for it is generated for any project.
 
 ## Solution
 
@@ -23,10 +28,29 @@ An M&E platform with an open-weight AI model built in. The AI does the work that
 
 ## Core Principle: Dynamic Input, Fixed Core
 
-- **The input is fully dynamic.** No template is required. A framework can be a logframe in Excel, a Theory of Change in Word, a PDF annex from a donor or a messy sheet with merged cells. It can have any number of levels, any level names, any column layout and any language.
+- **The input is fully dynamic.** No template is required. If a person can read the framework, the platform should be able to extract it:
+  - **Any file type:** Excel (including old `.xls`), CSV, Word, PowerPoint, PDF (digital or scanned), OpenDocument, or a photo of a printed logframe.
+  - **Any shape:** logframe matrices, results chains, indicator tracking tables with targets per year, indicator reference sheets, narrative M&E plans, Theory of Change diagrams, any donor's template.
+  - **Any number of levels, any level names, any column layout, any language.**
+  - **Several files together:** the framework, indicator reference sheets, existing questionnaires and a targets workbook can be uploaded as one package.
+  - **Several frameworks in one file** (e.g. one sheet per municipality) become separate components of the project.
 - **The core is fixed.** Inside the platform, every project is stored in the same generic structure (results, indicators, forms, entities, breakdown categories). The AI's job is to translate whatever comes in into that structure.
 
 Because the core never changes, the dashboard, the calculation engine and the form renderer work for every project without new code. Adding a new organization or a completely different framework adds data, never database migrations or custom code.
+
+## What Every Project Gets
+
+The same level of output that was built by hand for ENABEL, generated for any project:
+
+- Digital forms: **surveys** (filled once per interview) and **registers** (activity records kept and edited over time, such as training sessions or exhibitions), linked to each other
+- Indicators calculated automatically, with breakdowns (sex, age, location or anything the framework asks for)
+- A dashboard per component and for the whole project, which says in words why a figure is missing
+- Manual entry for indicators that have no form
+- Evidence files attached to records, with a list of counted records that still lack evidence
+- Periodic donor reports
+- Generated indicator reference sheets and a data dictionary
+- An optional public portal: public application or registration forms, public listings (e.g. upcoming trainings) and "my applications" for participants
+- Several languages, including right-to-left
 
 ## How It Works
 
@@ -77,6 +101,9 @@ When a framework is revised mid-project, the AI compares the new version with th
 | Breakdowns (sex, age, disability, region, sector, income group…) | Breakdown categories and their values are data per project, not columns |
 | Indicator types | Counts, percentages and ratios, sums and averages, yes/no milestones, composite indexes, qualitative and manually entered indicators |
 | Who runs and sees the project | An owner organization plus optional client and donor organizations; outside users (donors, partners, evaluators) get access to specific projects only |
+| Several frameworks or teams in one project | Components, each with its own framework; members can be limited to some components |
+| Where data is collected | Sites of any kind and depth (governorates, villages, facilities, schools…) |
+| Kinds of data collection | Surveys, activity registers linked to each other, public application forms |
 | Reporting cycle | Set per project (monthly, quarterly, annual…) |
 | Language and currency | Set per organization or project, including right-to-left languages |
 | Comparing projects | An indicator library of standard indicators (SDG, donor core indicators or an organization's own set) lets results roll up across projects |
@@ -86,11 +113,11 @@ When a framework is revised mid-project, the AI compares the new version with th
 Every project is stored as rows in the same tables. JSON columns hold whatever varies between projects.
 
 **Tenancy and access**
-- `organization` → `project` (owner organization, plus optional client and donor organizations)
+- `organization` → `project` (owner organization, plus optional client and donor organizations) → `component` (one or more per project)
 - `membership`: user, project and role. Access is enforced per project on every query by the back-end.
 
 **The framework**
-- `framework_document`: the uploaded file, its version and its processing status
+- `framework_document`: one uploaded package (one or more files), its version and its processing status
 - `framework_level`: the project's own level names
 - `result`: the results tree (each row points to its parent)
 - `indicator`: code, name, unit, baseline, targets and status (draft / active / retired)
@@ -102,8 +129,10 @@ Every project is stored as rows in the same tables. JSON columns hold whatever v
 - `entity_type`: what the project counts, with an attribute schema in JSON
 - `entity`: one row per real person, household, business…, with an identity key and its attributes in JSON
 - `disaggregation`: the project's breakdown categories and their values
-- `form` → `form_version` (with its `schema` JSON)
-- `submission`: form version, entity, `data` JSON, who collected it and when
+- `site`: where data is collected
+- `form` → `form_version` (with its `schema` JSON); a form is a survey or a register, for staff or public
+- `submission`: form version, component, site, entity, `data` JSON, who collected it and when; register records keep their edit history and can link to other records
+- `evidence`: files attached to records or to an indicator for a period
 
 **AI and calculation**
 - `ai_suggestion`: every draft the AI produces, with its review status and who approved it

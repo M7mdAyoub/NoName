@@ -30,6 +30,7 @@ The detailed build plan for the back-end of the AI-powered M&E platform describe
 22. [Build phases](#22-build-phases)
 23. [Risks and mitigations](#23-risks-and-mitigations)
 24. [Open decisions](#24-open-decisions)
+25. [Worked example: ENABEL as one project](#25-worked-example-enabel-as-one-project)
 
 ---
 
@@ -37,7 +38,9 @@ The detailed build plan for the back-end of the AI-powered M&E platform describe
 
 ### Goals
 - **One generic back-end for every project.** No table, view, route or line of code is ever written for a specific project or organization. A new project is rows, not code.
-- **Any framework in, one fixed structure inside.** The AI translates any Results Framework (Excel, Word, PDF, any layout or language) into the platform's fixed data model.
+- **Many organizations, many projects each.** Any company, NGO or consulting firm is an organization; each runs as many projects as it needs. A project can contain several **components** (municipalities, countries, workstreams), each with its own framework and team.
+- **Any framework in, one fixed structure inside.** The AI translates any Results Framework, in any file type, layout, donor template or language (see [10.1](#101-supported-inputs)), into the platform's fixed data model.
+- **ENABEL-level output for every project.** What was built by hand for ENABEL (forms, activity registers, calculated indicators with breakdowns, a dashboard that explains missing figures, manual entries, evidence, periodic donor reports, a public portal) is generated for any project. ENABEL is only an example of the output, never a template: see [section 25](#25-worked-example-enabel-as-one-project).
 - **The AI proposes, a human approves, the engine calculates.** The LLM never produces a published number. It writes drafts; the M&E lead approves them; a deterministic engine computes every figure.
 - **Fully self-hosted.** API, worker, database file and LLM run on infrastructure the operator controls.
 - **Field-ready.** Offline collection, idempotent sync, form versions that never break old data.
@@ -64,6 +67,8 @@ The detailed build plan for the back-end of the AI-powered M&E platform describe
 | LLM serving | **vLLM** (production, GPU) or **Ollama** (development) | Both support JSON-schema-constrained output |
 | Excel | **openpyxl** | Merged cells, hidden sheets, formulas, comments |
 | Word | **python-docx** | Paragraphs, headings and tables |
+| PowerPoint | **python-pptx** | Theory of Change slides: text boxes, tables, shapes and connectors |
+| Legacy and OpenDocument files | **LibreOffice (headless)** | Converts `.xls`, `.doc`, `.ppt`, `.ods`, `.odt`, `.odp` to their modern equivalents before parsing |
 | PDF | **pdfplumber**; **Tesseract** (or a Qwen vision model) for scanned pages | Text and table extraction; OCR fallback |
 | Fuzzy matching | **rapidfuzz** | Matching indicators across framework revisions |
 | Passwords | **argon2-cffi** (Argon2id) | Current best practice |
@@ -119,6 +124,7 @@ SQLite has no row-level security, so data separation is enforced in the applicat
 - Every project-owned table carries `project_id` (directly or through a parent that does).
 - **All data access goes through a repository layer.** Each repository function takes a `ProjectScope` (the project ID plus the caller's role), and every query it builds includes `project_id = :project_id`. Route handlers never write SQL.
 - A FastAPI dependency resolves the caller's membership for the project in the URL and builds the `ProjectScope`. A route that touches project data cannot be written without it.
+- **Component restriction.** A membership can be limited to some components of a project (e.g. a municipality's team sees only its municipality). `ProjectScope` carries the allowed component ids, and repositories add `component_id IN (…)` on every table that has a component. A membership with no component rows sees the whole project.
 - **Automated guard tests** (see [20.4](#204-tenancy-and-permission-tests)) call every endpoint as a user from a different project and assert `404`.
 
 ### 3.5 Backups and integrity
@@ -174,7 +180,9 @@ backend/
 │   │   └── dirty.py             # tracks which indicators need recalculation
 │   ├── ingestion/
 │   │   ├── ir.py                # document intermediate representation
-│   │   ├── xlsx.py, docx.py, pdf.py, ocr.py
+│   │   ├── convert.py           # LibreOffice conversion of legacy / OpenDocument files
+│   │   ├── xlsx.py, docx.py, pptx.py, pdf.py, csv.py
+│   │   └── ocr.py, vision.py    # scanned pages and images
 │   ├── ai/
 │   │   ├── client.py            # OpenAI-compatible client, retries, logging
 │   │   ├── prompts/             # versioned prompt templates (.md)
@@ -364,42 +372,76 @@ CREATE TABLE project_membership (
   id          TEXT PRIMARY KEY,
   project_id  TEXT NOT NULL REFERENCES project(id),
   user_id     TEXT NOT NULL REFERENCES app_user(id),
-  role        TEXT NOT NULL CHECK (role IN ('project_admin','me_lead','data_manager','enumerator','viewer')),
+  role        TEXT NOT NULL CHECK (role IN ('project_admin','me_lead','data_manager','enumerator','viewer','participant')),
   <std>
 ) STRICT;
 CREATE UNIQUE INDEX ux_project_member ON project_membership(project_id, user_id) WHERE deleted_at IS NULL;
+
+-- A part of a project with its own framework and, optionally, its own team:
+-- a municipality, a country, a workstream. Every project has at least one (is_default = 1).
+CREATE TABLE component (
+  id          TEXT PRIMARY KEY,
+  project_id  TEXT NOT NULL REFERENCES project(id),
+  key         TEXT NOT NULL,
+  name        TEXT NOT NULL CHECK (json_valid(name)),
+  is_default  INTEGER NOT NULL DEFAULT 0 CHECK (is_default IN (0,1)),
+  public_slug TEXT,                                -- e.g. 'sahel-horan' for its public portal
+  <std>
+) STRICT;
+CREATE UNIQUE INDEX ux_component_key ON component(project_id, key) WHERE deleted_at IS NULL;
+
+-- Limits a membership to some components; no rows = the whole project
+CREATE TABLE membership_component (
+  membership_id  TEXT NOT NULL REFERENCES project_membership(id),
+  component_id   TEXT NOT NULL REFERENCES component(id),
+  PRIMARY KEY (membership_id, component_id)
+) STRICT;
 ```
 
 ### 5.3 Framework (`0003`)
 
 ```sql
+-- One upload = one "framework package": a single file, or several files that belong together
+-- (framework + indicator reference sheets + survey tools + targets workbook)
 CREATE TABLE framework_document (
   id                TEXT PRIMARY KEY,
   project_id        TEXT NOT NULL REFERENCES project(id),
+  component_id      TEXT REFERENCES component(id),   -- NULL = let the AI propose components (several frameworks in one package)
   version_no        INTEGER NOT NULL,
-  file_id           TEXT NOT NULL REFERENCES file(id),
   status            TEXT NOT NULL CHECK (status IN
                       ('uploaded','parsing','parsed','extracting','in_review','published','failed','superseded')),
-  ir_file_id        TEXT REFERENCES file(id),     -- parsed intermediate representation (JSON on disk)
   detected_language TEXT,
   error             TEXT,
   uploaded_by       TEXT NOT NULL REFERENCES app_user(id),
   <std>
 ) STRICT;
-CREATE UNIQUE INDEX ux_fwdoc_version ON framework_document(project_id, version_no);
+CREATE UNIQUE INDEX ux_fwdoc_version ON framework_document(project_id, IFNULL(component_id,''), version_no);
 
-CREATE TABLE framework_level (
-  id          TEXT PRIMARY KEY,
-  project_id  TEXT NOT NULL REFERENCES project(id),
-  depth       INTEGER NOT NULL CHECK (depth >= 0),      -- 0 = top (e.g. Impact / Goal)
-  name        TEXT NOT NULL CHECK (json_valid(name)),   -- the project's own word for this level
+CREATE TABLE framework_document_file (
+  id                     TEXT PRIMARY KEY,
+  framework_document_id  TEXT NOT NULL REFERENCES framework_document(id),
+  file_id                TEXT NOT NULL REFERENCES file(id),      -- the original upload
+  converted_file_id      TEXT REFERENCES file(id),               -- e.g. .xls → .xlsx via LibreOffice
+  ir_file_id             TEXT REFERENCES file(id),               -- parsed intermediate representation (JSON on disk)
+  role_hint              TEXT CHECK (role_hint IN ('framework','indicator_reference','survey_tool','targets','other')),  -- optional, from the uploader
+  detected_role          TEXT,                                   -- what the AI decided the file is
   <std>
 ) STRICT;
-CREATE UNIQUE INDEX ux_level_depth ON framework_level(project_id, depth) WHERE deleted_at IS NULL;
+
+CREATE TABLE framework_level (
+  id            TEXT PRIMARY KEY,
+  project_id    TEXT NOT NULL REFERENCES project(id),
+  component_id  TEXT NOT NULL REFERENCES component(id),   -- each component's framework names its own levels
+  depth         INTEGER NOT NULL CHECK (depth >= 0),      -- 0 = top (e.g. Impact / Goal)
+  name          TEXT NOT NULL CHECK (json_valid(name)),   -- the framework's own word for this level
+  <std>
+) STRICT;
+CREATE UNIQUE INDEX ux_level_depth ON framework_level(component_id, depth) WHERE deleted_at IS NULL;
 
 CREATE TABLE result (
   id           TEXT PRIMARY KEY,
   project_id   TEXT NOT NULL REFERENCES project(id),
+  component_id TEXT NOT NULL REFERENCES component(id),
   parent_id    TEXT REFERENCES result(id),
   level_id     TEXT NOT NULL REFERENCES framework_level(id),
   code         TEXT,                                     -- as written in the framework, e.g. "1.2"
@@ -442,6 +484,7 @@ CREATE TABLE indicator (
   data_source           TEXT,
   responsible           TEXT,
   library_indicator_id  TEXT REFERENCES indicator_library(id),
+  evidence_required     INTEGER NOT NULL DEFAULT 0 CHECK (evidence_required IN (0,1)),  -- counted records need a supporting file
   status                TEXT NOT NULL CHECK (status IN ('draft','active','retired')),
   source_ref            TEXT CHECK (source_ref IS NULL OR json_valid(source_ref)),
   <std>
@@ -514,12 +557,26 @@ CREATE TABLE entity_alias (
   created_at  TEXT NOT NULL
 ) STRICT;
 
+-- Where data is collected: governorates, villages, health facilities, schools … (any depth)
+CREATE TABLE site (
+  id            TEXT PRIMARY KEY,
+  project_id    TEXT NOT NULL REFERENCES project(id),
+  component_id  TEXT REFERENCES component(id),
+  parent_id     TEXT REFERENCES site(id),
+  key           TEXT NOT NULL,
+  name          TEXT NOT NULL CHECK (json_valid(name)),
+  kind          TEXT NOT NULL,                              -- the project's own word: 'village', 'facility' …
+  location      TEXT CHECK (location IS NULL OR json_valid(location)),
+  <std>
+) STRICT;
+CREATE UNIQUE INDEX ux_site_key ON site(project_id, key) WHERE deleted_at IS NULL;
+
 CREATE TABLE disaggregation (
   id           TEXT PRIMARY KEY,
   project_id   TEXT NOT NULL REFERENCES project(id),
   key          TEXT NOT NULL,                               -- 'sex', 'age_group', 'governorate'
   name         TEXT NOT NULL CHECK (json_valid(name)),
-  source       TEXT NOT NULL CHECK (source IN ('entity_attribute','submission_field')),
+  source       TEXT NOT NULL CHECK (source IN ('entity_attribute','submission_field','site','component')),
   source_path  TEXT NOT NULL,                               -- attribute key or form field id
   derive       TEXT CHECK (derive IS NULL OR json_valid(derive)),       -- e.g. age bins from date_of_birth
   value_set    TEXT NOT NULL CHECK (json_valid(value_set)),             -- [{"value":"f","label":{...}}, …]
@@ -534,10 +591,19 @@ CREATE UNIQUE INDEX ux_disagg_key ON disaggregation(project_id, key) WHERE delet
 CREATE TABLE form (
   id              TEXT PRIMARY KEY,
   project_id      TEXT NOT NULL REFERENCES project(id),
+  component_id    TEXT REFERENCES component(id),           -- NULL = used by every component
   key             TEXT NOT NULL,                            -- stable machine name, e.g. 'training_attendance'
   title           TEXT NOT NULL CHECK (json_valid(title)),
   purpose         TEXT,
   entity_type_id  TEXT REFERENCES entity_type(id),
+  mode            TEXT NOT NULL DEFAULT 'survey' CHECK (mode IN ('survey','register')),
+                  -- survey: filled once per interview; register: a list of records that are kept and edited
+                  -- over time (training sessions, exhibitions, advisory visits, grants …)
+  access          TEXT NOT NULL DEFAULT 'staff' CHECK (access IN ('staff','participant','public')),
+                  -- participant/public forms are filled on the public portal (applications, registrations)
+  public_key      TEXT,                                     -- unguessable id used in public URLs
+  public_listing  INTEGER NOT NULL DEFAULT 0 CHECK (public_listing IN (0,1)),
+                  -- register records marked "published" are listed on the portal (e.g. upcoming trainings)
   status          TEXT NOT NULL CHECK (status IN ('draft','active','retired')),
   <std>
 ) STRICT;
@@ -564,13 +630,17 @@ BEGIN SELECT RAISE(ABORT, 'published form versions are immutable; create a new v
 CREATE TABLE submission (
   id                TEXT PRIMARY KEY,                       -- client-generated UUIDv7 (idempotent sync)
   project_id        TEXT NOT NULL REFERENCES project(id),
+  component_id      TEXT NOT NULL REFERENCES component(id),
+  site_id           TEXT REFERENCES site(id),
   form_version_id   TEXT NOT NULL REFERENCES form_version(id),
   entity_id         TEXT REFERENCES entity(id),
   data              TEXT NOT NULL CHECK (json_valid(data)),
+  revision          INTEGER NOT NULL DEFAULT 1,             -- register records can be edited; see submission_revision
+  is_published      INTEGER NOT NULL DEFAULT 0 CHECK (is_published IN (0,1)),   -- shown on the public portal
   collected_at      TEXT NOT NULL,                          -- when the interview happened (device clock)
   collected_on      TEXT GENERATED ALWAYS AS (substr(collected_at, 1, 10)) STORED,
   received_at       TEXT NOT NULL,                          -- when the server got it
-  collected_by      TEXT NOT NULL REFERENCES app_user(id),
+  collected_by      TEXT REFERENCES app_user(id),           -- NULL for anonymous public submissions
   device_id         TEXT,
   location          TEXT CHECK (location IS NULL OR json_valid(location)),
   status            TEXT NOT NULL CHECK (status IN ('submitted','flagged','approved','rejected')),
@@ -581,6 +651,51 @@ CREATE TABLE submission (
 CREATE INDEX ix_sub_form_date ON submission(project_id, form_version_id, collected_on);
 CREATE INDEX ix_sub_entity ON submission(entity_id);
 CREATE INDEX ix_sub_collector ON submission(project_id, collected_by, collected_on);
+CREATE INDEX ix_sub_component ON submission(component_id, collected_on);
+
+-- Earlier versions of edited register records (the current version stays in submission)
+CREATE TABLE submission_revision (
+  id             TEXT PRIMARY KEY,
+  submission_id  TEXT NOT NULL REFERENCES submission(id),
+  revision       INTEGER NOT NULL,
+  data           TEXT NOT NULL CHECK (json_valid(data)),
+  edited_by      TEXT REFERENCES app_user(id),
+  edited_at      TEXT NOT NULL,
+  note           TEXT
+) STRICT;
+CREATE UNIQUE INDEX ux_sub_revision ON submission_revision(submission_id, revision);
+
+-- Links written from record_ref / entity_ref fields (e.g. attendance → training session),
+-- kept as rows for fast joins and integrity checks
+CREATE TABLE submission_link (
+  id                  TEXT PRIMARY KEY,
+  project_id          TEXT NOT NULL REFERENCES project(id),
+  from_submission_id  TEXT NOT NULL REFERENCES submission(id),
+  field_id            TEXT NOT NULL,
+  to_submission_id    TEXT REFERENCES submission(id),
+  to_entity_id        TEXT REFERENCES entity(id),
+  <std>,
+  CHECK ((to_submission_id IS NULL) <> (to_entity_id IS NULL))
+) STRICT;
+CREATE INDEX ix_link_from ON submission_link(from_submission_id);
+CREATE INDEX ix_link_to_sub ON submission_link(to_submission_id);
+
+-- Means of verification: files attached to records, indicator periods or manual values
+CREATE TABLE evidence (
+  id                   TEXT PRIMARY KEY,
+  project_id           TEXT NOT NULL REFERENCES project(id),
+  file_id              TEXT NOT NULL REFERENCES file(id),
+  submission_id        TEXT REFERENCES submission(id),
+  indicator_id         TEXT REFERENCES indicator(id),
+  reporting_period_id  TEXT REFERENCES reporting_period(id),
+  kind                 TEXT,                                -- 'attendance_sheet', 'photo', 'certificate', 'report' …
+  note                 TEXT,
+  uploaded_by          TEXT REFERENCES app_user(id),
+  <std>,
+  CHECK (submission_id IS NOT NULL OR indicator_id IS NOT NULL)
+) STRICT;
+CREATE INDEX ix_evidence_sub ON evidence(submission_id);
+CREATE INDEX ix_evidence_ind ON evidence(indicator_id, reporting_period_id);
 
 -- For indicators that have no data-collection form
 CREATE TABLE manual_value (
@@ -638,8 +753,8 @@ CREATE TABLE ai_suggestion (
   id                TEXT PRIMARY KEY,
   change_set_id     TEXT NOT NULL REFERENCES change_set(id),
   kind              TEXT NOT NULL CHECK (kind IN
-                      ('framework_level','result','indicator','indicator_definition','target',
-                       'entity_type','disaggregation','form','reporting_period','library_link')),
+                      ('component','framework_level','result','indicator','indicator_definition','target',
+                       'manual_value','entity_type','disaggregation','site','form','reporting_period','library_link')),
   action            TEXT NOT NULL CHECK (action IN ('create','update','retire')),
   target_id         TEXT,                          -- existing row for update/retire
   temp_key          TEXT NOT NULL,                 -- lets suggestions reference each other before publish
@@ -792,18 +907,24 @@ CREATE TABLE report (
 ### 5.9 How the tables relate
 
 ```
-organization ─┬─ org_membership ── app_user ── project_membership ─┐
-              └─ project ──────────────────────────────────────────┘
-                   ├─ project_party
-                   ├─ framework_document ── change_set ── ai_suggestion ── open_question
-                   ├─ framework_level ── result (tree) ── indicator ─┬─ indicator_target
-                   │                                                  ├─ indicator_definition ── indicator_field_link
-                   │                                                  ├─ indicator_value
-                   │                                                  └─ manual_value
+organization ─┬─ org_membership ── app_user ── project_membership (── membership_component)
+              └─ project (many per organization)
+                   ├─ project_party (clients, donors, partners)
+                   ├─ component (one or more; each has its own framework)
+                   │    ├─ framework_document ── framework_document_file
+                   │    │        └─ change_set ── ai_suggestion ── open_question
+                   │    └─ framework_level ── result (tree) ── indicator ─┬─ indicator_target
+                   │                                                       ├─ indicator_definition ── indicator_field_link
+                   │                                                       ├─ indicator_value
+                   │                                                       ├─ manual_value
+                   │                                                       └─ evidence
+                   ├─ site (tree)
                    ├─ reporting_period
                    ├─ entity_type ── entity (── entity_alias)
                    ├─ disaggregation
-                   ├─ form ── form_version ── submission ── entity
+                   ├─ form ── form_version ── submission ─┬─ submission_revision
+                   │                                       ├─ submission_link (→ other records / entities)
+                   │                                       └─ evidence
                    └─ qual_analysis ── qual_theme ── qual_coding
 ```
 
@@ -831,7 +952,11 @@ organization ─┬─ org_membership ── app_user ── project_membership 
 | Lock periods, generate reports | | | ✓ | ✓ | | | |
 | Read audit log | ✓ | ✓ | ✓ | | | | |
 
-Org admins have project-admin rights on every project their organization owns. Permissions are defined once in `app/auth/permissions.py` as a map from action to allowed roles, and checked through a single dependency, `require(action)`.
+Org admins have project-admin rights on every project their organization owns.
+
+**Participants** are people the project serves who have a portal account (e.g. to apply for a training). They can only fill `participant`/`public` forms and see their own submissions and their status ("my applications"). They never see the staff app, other people's data or indicators. Anonymous visitors can fill `public` forms only.
+
+**Component restriction** applies on top of the role: a data manager limited to one component has data-manager rights in that component only ([3.4](#34-tenancy-without-row-level-security)). Permissions are defined once in `app/auth/permissions.py` as a map from action to allowed roles, and checked through a single dependency, `require(action)`.
 
 ---
 
@@ -870,7 +995,9 @@ Stored in `form_version.schema`. The AI produces it, the M&E lead edits it, the 
 }
 ```
 
-**Field types:** `text`, `integer`, `decimal`, `select_one`, `select_multiple`, `date`, `datetime`, `geopoint`, `file`, `note` (display only), `group`, `repeat`.
+**Field types:** `text`, `integer`, `decimal`, `select_one`, `select_multiple`, `date`, `datetime`, `geopoint`, `file`, `note` (display only), `group`, `repeat`, `site` (pick a site), `record_ref` (pick a record from a register form, e.g. which training session this attendance belongs to: `"ref_form": "training_session"`), `entity_ref` (pick another entity besides the form's main one, e.g. the business a person works for).
+
+**Survey vs. register forms** (`form.mode`): a **survey** is filled once per interview. A **register** is a list of records that are kept and edited over time (training sessions, exhibitions, advisory visits, grants, partnerships). Registers get list and detail screens; every edit keeps the previous version in `submission_revision`. Survey forms can point at register records with `record_ref`, which is how "attendance at a session" or "follow-up of a grant" is modelled without any project-specific tables.
 
 **Field properties:** `id` (stable, unique within the form), `type`, `label`, `hint`, `required`, `options`, `constraints` (`min`, `max`, `min_length`, `max_length`, `pattern`), `relevant` (show only when a condition holds), `unit`, `pii` (never sent to the LLM, hidden from viewers), `qualitative` (open text included in qualitative analysis), `entity_attribute` (copied to the linked entity), `default`.
 
@@ -970,6 +1097,8 @@ The engine always stores **both** a `period` and a `cumulative` value where that
 ```
 
 Operators: `eq`, `neq`, `gt`, `gte`, `lt`, `lte`, `in`, `not_in`, `between` (`[lo, hi]`), `contains` (for `select_multiple`), `is_empty`, `is_not_empty`.
+
+Besides form fields and `entity.<attribute>`, a condition can reach **one hop** through a `record_ref` field: `"field": "session.session_type"` reads `session_type` on the register record that the `session` field points to. Example: count distinct people who attended sessions whose type is "agri-food". Also available: `"field": "site"` / `"component"` with `in` lists of keys.
 
 ### 8.4 Examples
 
@@ -1098,7 +1227,40 @@ Other constructs:
 
 Turns any uploaded file into an **intermediate representation (IR)** the AI can read, with a source reference for every piece of text so reviewers can see where each suggestion came from.
 
-### 10.1 IR format (stored as a JSON file, linked from `framework_document.ir_file_id`)
+### 10.1 Supported inputs
+
+The rule: **if a person can read the framework, the platform should be able to extract it.** No template, no required column names, no required layout.
+
+**File types**
+
+| Type | Handling |
+|---|---|
+| `.xlsx`, `.xlsm`, `.csv` | Parsed directly |
+| `.xls`, `.ods` | Converted to `.xlsx` with LibreOffice, then parsed |
+| `.docx` | Parsed directly |
+| `.doc`, `.odt`, `.rtf` | Converted to `.docx`, then parsed |
+| `.pptx` | Parsed directly (Theory of Change slides: shapes, text boxes, arrows, tables) |
+| `.ppt`, `.odp` | Converted to `.pptx`, then parsed |
+| `.pdf` (digital) | Text and tables extracted |
+| `.pdf` (scanned), `.png`, `.jpg` | OCR, or a vision model for diagrams and photos of printed logframes |
+
+**Framework shapes** the pipeline is built and tested against:
+
+- **Logframe matrix** (e.g. the classic 4×4: intervention logic / indicators / sources of verification / assumptions), with merged cells spanning rows.
+- **Results chain tables** (impact → outcomes → outputs → activities) with any level names.
+- **Indicator tracking tables** where baselines and targets are spread across columns per year or quarter ("wide" layout), including actuals already filled in.
+- **Performance measurement frameworks / plans** with one row per indicator and many attribute columns.
+- **Indicator reference sheets** (one indicator per page or per sheet, as key–value pairs: definition, unit, disaggregation, data source, frequency, responsible).
+- **Narrative M&E plans** in Word, where indicators sit in paragraphs and bullet lists.
+- **Theory of Change diagrams** in PowerPoint, PDF or as images (boxes and arrows).
+- **Donor templates** (EU, USAID, FCDO, GIZ, UN agencies, World Bank and others); recognized as layouts, never hard-coded.
+- **Transposed tables** (indicators as columns), **multi-row headers**, **blank spacer rows**, **subtotal rows**, **colour-coded levels** (fill colour is kept in the IR as a hint).
+- **Several frameworks in one file** (e.g. one sheet per municipality or country) → proposed as separate **components** of one project.
+- **Any language**, including right-to-left scripts, and mixed-language documents.
+
+**Packages:** one upload can contain several files that belong together: the framework, indicator reference sheets, the survey tools (questionnaires), a targets workbook and calculation notes. The AI decides what each file is (`framework_document_file.detected_role`) and links them: questionnaires become forms, reference sheets enrich indicators, targets fill `indicator_target`.
+
+### 10.2 IR format (stored as a JSON file, linked from `framework_document_file.ir_file_id`)
 
 ```json
 {
@@ -1114,14 +1276,17 @@ Turns any uploaded file into an **intermediate representation (IR)** the AI can 
 }
 ```
 
-### 10.2 Parsers
-- **Excel (`openpyxl`):** every sheet, including hidden sheets (marked hidden). **Merged cells are unmerged and the value copied into every covered cell**, so each row is self-contained. Formulas are read as their cached values. Cell comments are kept as notes. Empty rows split tables. Multi-row headers are detected (rows above the first data-like row) and kept as `header_rows`.
-- **Word (`python-docx`):** headings (with level), paragraphs, bulleted lists and tables (merged cells unmerged the same way). Text boxes are a known gap; logged as a warning.
+### 10.3 Parsers
+- **Conversion first:** legacy and OpenDocument files are converted with LibreOffice in headless mode (`soffice --headless --convert-to …`), in a sandboxed temporary directory with a timeout. The converted file is kept (`converted_file_id`) so reviewers can open it.
+- **Excel (`openpyxl`):** every sheet, including hidden sheets (marked hidden). **Merged cells are unmerged and the value copied into every covered cell**, so each row is self-contained. Formulas are read as their cached values. Cell comments are kept as notes. Fill colour and bold/indent are kept as style hints (many frameworks mark levels by colour or indentation). Empty rows split tables. Multi-row headers are detected (rows above the first data-like row) and kept as `header_rows`.
+- **Word (`python-docx`):** headings (with level), paragraphs, bulleted and numbered lists (with nesting) and tables (merged cells unmerged the same way). Text boxes are read from the underlying XML.
+- **PowerPoint (`python-pptx`):** per slide, every shape with its text and position, connectors with the shapes they join (so a Theory of Change diagram becomes boxes plus arrows), and tables.
 - **PDF (`pdfplumber`):** text per page and detected tables. If a page has almost no extractable text, it is treated as scanned and sent to **OCR** (Tesseract, or a Qwen vision model if configured).
+- **Images:** sent to the vision model (if configured) for a structured description of tables or boxes and arrows; otherwise OCR.
 - **CSV:** one table block.
-- **Limits:** 25 MB upload, 200 pages, 50 sheets, 100,000 cells (configurable). Excel files are opened read-only with a decompressed-size check (zip-bomb protection).
+- **Limits:** 25 MB per file, 10 files per package, 200 pages, 50 sheets, 100,000 cells (configurable). Office files are opened read-only with a decompressed-size check (zip-bomb protection).
 
-### 10.3 Output checks
+### 10.4 Output checks
 The parse step records counts (sheets, tables, rows, pages, OCR pages) and warnings on the `job` result, so the user sees "Parsed 3 sheets, 2 tables, 118 rows; 1 hidden sheet included" before extraction starts.
 
 ---
@@ -1148,19 +1313,21 @@ The pipeline runs as one `extract_framework` job, with progress updates after ea
 
 | # | Step | LLM? | Input | Output |
 |---|---|---|---|---|
-| A | **Parse** | no | uploaded file | IR (section 10) |
-| B | **Locate** | yes (small) | list of IR blocks with short previews | which blocks are the results framework, which are surveys/questionnaires, which are targets tables, which are irrelevant |
-| C | **Map columns** | yes (small) | header rows + 5 sample rows of each framework table | for each column, its role: `level`, `result_code`, `result_statement`, `indicator`, `unit`, `baseline`, `target`, `target_period`, `means_of_verification`, `frequency`, `responsible`, `assumptions`, `disaggregation`, `ignore` |
-| D | **Build structure** | mostly no | mapped tables | levels, results tree and raw indicator rows, built **by code** from the column mapping. Narrative documents (no usable table) fall back to LLM extraction per section. |
+| A | **Parse** | no | every file in the package | one IR per file (section 10) |
+| B | **Locate** | yes (small) | list of IR blocks from all files, with short previews | what each file and block is: results framework, indicator reference sheet, questionnaire, targets table, Theory of Change, irrelevant. Also detects **several frameworks** in one package (e.g. one sheet per municipality) and proposes one **component** per framework. |
+| C | **Map layout** | yes (small) | header rows + 5 sample rows of each framework table | the table's orientation (normal or transposed) and, for each column, its role: `level`, `result_code`, `result_statement`, `indicator`, `unit`, `baseline`, `target`, `target_by_period` (one column per year/quarter, with the period it represents), `actual_by_period`, `means_of_verification`, `frequency`, `responsible`, `assumptions`, `disaggregation`, `ignore`. Plus how levels are marked when there's no level column (indentation, colour, numbering like `1` / `1.1` / `1.1.1`). |
+| D | **Build structure** | mostly no | mapped tables | levels, results tree and raw indicator rows, built **by code** from the layout mapping. Documents with no usable table (narrative plans, reference sheets, ToC diagrams) fall back to LLM extraction per section, slide or page. Reference sheets are matched to indicators by code or name and merged in. |
 | E | **Normalize indicators** | yes | each raw indicator row (+ its result) | clean name, unit, kind, direction, baseline (value/text/date), targets (per period or final), disaggregation mentions, data source, frequency, confidence, open questions |
 | F | **Entities and breakdowns** | yes | all normalized indicators | proposed `entity_type`s with attribute schemas, and `disaggregation`s with value sets (e.g. "disaggregated by sex and age" → `sex`, `age_group` with bins) |
-| G | **Forms** | yes | survey blocks from B (if any) + indicators grouped by data source and frequency | **convert** existing questionnaires into the form schema (section 7), or **generate** new forms from means of verification. One form per data-collection moment, shared across the indicators that use it. Fields needed by breakdowns are included. |
+| G | **Forms** | yes | questionnaire blocks from B (if any) + indicators grouped by data source and frequency | **convert** existing questionnaires into the form schema (section 7), or **generate** new forms from means of verification. Decides **survey vs. register** (activities like training sessions or exhibitions become registers; attendance and follow-ups become surveys linked to them with `record_ref`), and which forms are **public** (applications, registrations). One form per data-collection moment, shared across the indicators that use it. Fields needed by breakdowns are included. |
 | H | **Definitions** | yes | each indicator + its form(s) + entity types + disaggregations | an indicator definition (section 8) referencing real form keys and field ids |
 | I | **Library links** | yes (small) | indicators + candidate library entries (pre-filtered by rapidfuzz) | suggested links to standard indicators |
 | J | **Cross-check** | no | everything | deterministic validation (below) |
 | K | **Package** | no | everything | one `change_set` with ordered `ai_suggestion`s and `open_question`s |
 
-Using an LLM only to **map columns** (C), then building the structure **in code** (D), is the key to reliability and cost: on a typical 40-row logframe, the model reads ~10 rows instead of all 40, and row-level mistakes can't happen in step D.
+Targets and actuals found in wide tables (step C) become `indicator_target` suggestions per period and, for actuals already reported before the platform was used, `manual_value` suggestions, so historic results aren't lost.
+
+Using an LLM only to **map the layout** (C), then building the structure **in code** (D), is the key to reliability and cost: on a typical 40-row logframe, the model reads ~10 rows instead of all 40, and row-level mistakes can't happen in step D.
 
 **Large documents:** steps E and H run per indicator (in parallel, within the concurrency limit), so document size never exceeds the context window. Step B sends previews, not full blocks.
 
@@ -1223,6 +1390,22 @@ Rejected suggestions are kept for evaluation (they show where the AI is weak).
 - No match → create the entity with the device's id; copy `entity_attribute` fields into `attributes`.
 - **Possible duplicates** without an identity key (same name, date of birth and location) are listed at `GET /entities/duplicates` for a data manager to merge. Merging sets `merged_into_id` (and repoints any earlier merges into the merged entity, so chains never form); nothing is deleted, and the engine counts merged entities once.
 
+### 13.4 Registers (activity records)
+- `GET /forms/{id}/records` lists a register's records with filters and the columns the schema marks as `list: true`; `GET /submissions/{id}` returns the record with its linked records (`submission_link` both ways: a session shows its attendance; an attendance shows its session) and evidence.
+- `PATCH /submissions/{id}` with new `data` (register records only): validated against the record's form version, the old data copied to `submission_revision`, `revision` incremented, links rebuilt, affected indicators marked dirty. Survey submissions are never edited, only flagged, rejected or superseded by a new submission.
+- On every save, `record_ref` / `entity_ref` fields are checked (the target exists, is in the same project, is of the right form) and written to `submission_link`.
+
+### 13.5 Evidence and verification gaps
+- Files can be attached to any record (`evidence.submission_id`) or to an indicator for a period (`evidence.indicator_id` + `reporting_period_id`), e.g. a signed attendance sheet or a partner's report.
+- For indicators with `evidence_required = 1`, `GET /projects/{id}/verification-gaps?period=` lists the records counted by that indicator that have no evidence, so the M&E lead can chase them before reporting. The engine still counts them, but adds a warning ("12 of 58 counted records have no evidence").
+
+### 13.6 Public portal
+For forms with `access = public` or `participant`, per component (its `public_slug`):
+- `GET /public/{slug}` returns the component's public page data: open public forms, and published register records from forms with `public_listing = 1` (e.g. upcoming trainings or markets with dates and places; only fields the schema marks `public: true`).
+- `POST /public/forms/{public_key}/submissions` accepts submissions without staff login: strict rate limits per IP, a honeypot field, and size limits. They arrive with status `submitted` for staff to review.
+- Participants with an account (`participant` role) sign in and see `GET /public/me/submissions`, their own applications and their status.
+- Public pages never expose indicators, other people's data or anything marked `pii`.
+
 ---
 
 ## 14. Qualitative analysis
@@ -1262,6 +1445,12 @@ Uploading a new version of the framework runs the same pipeline (steps A–J), t
 - **csv:** the indicator table only.
 
 Reports for a **locked** period are reproducible: the same file every time. Reports for an open period are labelled "provisional". Donor-specific templates are a later feature: a template maps the platform's indicator table onto the donor's layout.
+
+**Generated project documentation** (always up to date, because it's built from the published data):
+- **Indicator reference sheets:** one page per indicator with its result, definition in plain language (from `/indicators/{id}/explain`), unit, baseline, targets, breakdowns, data source, forms and fields used, frequency, responsible, and open questions.
+- **Data dictionary:** every form, field, option list, entity type and breakdown, with which indicators use each field.
+
+Both export as xlsx (and Markdown), and replace the documentation that otherwise has to be written by hand for every project.
 
 ---
 
@@ -1320,11 +1509,14 @@ All routes under `/api/v1`. JSON in and out, except uploads (multipart) and down
 | GET, PATCH | `/projects/{project_id}` |
 | GET, POST, PATCH, DELETE | `/projects/{project_id}/members[/{id}]` |
 | GET, POST, PATCH, DELETE | `/projects/{project_id}/parties[/{id}]` |
+| GET, POST, PATCH, DELETE | `/projects/{project_id}/components[/{id}]` |
+| PUT | `/projects/{project_id}/members/{id}/components` (limit a member to some components) |
+| GET, POST, PATCH, DELETE | `/projects/{project_id}/sites[/{id}]` |
 
 **Framework and AI review**
 | Method | Path | Notes |
 |---|---|---|
-| POST | `/projects/{id}/framework-documents` | multipart upload → `{document, job}` (parse + extract) |
+| POST | `/projects/{id}/framework-documents` | multipart upload of one or more files (optional `component_id`, optional role hint per file) → `{document, job}` (parse + extract) |
 | GET | `/projects/{id}/framework-documents` | versions and statuses |
 | GET | `/framework-documents/{id}` | status, parse summary, IR preview |
 | GET | `/projects/{id}/framework` | the published tree: levels → results → indicators (+ targets, definition status, latest value) |
@@ -1362,9 +1554,13 @@ All routes under `/api/v1`. JSON in and out, except uploads (multipart) and down
 | GET | `/projects/{id}/collector-bundle` | ETag |
 | POST | `/sync/submissions` | batch, idempotent |
 | POST | `/form-versions/{id}/submissions` | single online submission |
-| GET | `/projects/{id}/submissions` | filters: form, period, collector, status, entity |
-| GET, PATCH | `/submissions/{id}` | PATCH: status + review note |
+| GET | `/projects/{id}/submissions` | filters: component, site, form, period, collector, status, entity |
+| GET | `/forms/{id}/records` | register list view |
+| GET, PATCH | `/submissions/{id}` | GET includes links and evidence; PATCH: status + review note, or new `data` for register records |
+| GET | `/submissions/{id}/revisions` | earlier versions of a register record |
 | DELETE | `/submissions/{id}` | soft delete |
+| GET, POST, DELETE | `/projects/{id}/evidence[/{evidence_id}]` | attach files to records or indicator periods |
+| GET | `/projects/{id}/verification-gaps?period=` | counted records missing required evidence |
 | GET, POST, PATCH | `/projects/{id}/entities[/{entity_id}]` | |
 | GET | `/projects/{id}/entities/duplicates` | |
 | POST | `/entities/{id}/merge` | `{into_id}` |
@@ -1383,6 +1579,11 @@ All routes under `/api/v1`. JSON in and out, except uploads (multipart) and down
 | PATCH | `/qual-themes/{id}` | rename, merge |
 | POST, GET | `/projects/{id}/reports` | |
 | GET | `/reports/{id}/download` | |
+| GET | `/projects/{id}/docs/indicator-sheets?format=xlsx\|md` | generated indicator reference sheets |
+| GET | `/projects/{id}/docs/data-dictionary?format=xlsx\|md` | generated data dictionary |
+| GET | `/public/{slug}` | public page data for a component (no login) |
+| POST | `/public/forms/{public_key}/submissions` | public submission (no login, rate-limited) |
+| GET | `/public/me/submissions` | a participant's own applications |
 | GET | `/jobs/{id}`, `/jobs/{id}/events` | |
 | GET | `/projects/{id}/audit-log` | |
 | GET | `/healthz`, `/readyz` | readyz checks the database and the LLM endpoint |
@@ -1453,7 +1654,7 @@ Real SQLite file per test (temporary directory), all migrations applied, FastAPI
 - `scripts/check_routes_scoped.py` fails CI if a project route doesn't depend on `ProjectScope`.
 
 ### 20.5 Ingestion
-Golden IR snapshots for a varied set of sample frameworks: a classic logframe in Excel with merged cells, a multi-sheet workbook with a separate targets sheet, a Theory of Change in Word, a PDF annex with tables, a scanned PDF, and an Arabic-language framework. **Use only documents we have permission to use**; real beneficiary data never goes into fixtures.
+Golden IR snapshots for at least one sample of every input type and shape in [10.1](#101-supported-inputs): a classic 4×4 logframe in Excel with merged cells, an indicator tracking table with targets per year as columns, a transposed table, a workbook with one framework per sheet, a multi-file package (framework + reference sheets + questionnaires), indicator reference sheets in Word, a narrative M&E plan, a Theory of Change in PowerPoint, a PDF annex with tables, a scanned PDF, a photo of a printed logframe, a legacy `.xls`, and an Arabic-language framework. **Use only documents we have permission to use**; real beneficiary data never goes into fixtures.
 
 ### 20.6 AI evaluation
 `tests/ai_eval/` holds hand-labelled expected outputs for the sample frameworks. `make ai-eval` runs the real pipeline against a configured model and reports:
@@ -1465,6 +1666,8 @@ Golden IR snapshots for a varied set of sample frameworks: a classic logframe in
 - tokens and time per framework.
 
 It's run on every prompt or model change, and results are kept, so a prompt change can't silently make extraction worse.
+
+**Hand-built benchmark:** where a project was previously set up by hand (ENABEL is the first: its frameworks, forms workbooks and indicator documentation exist), the AI's draft from the original files is compared against what was built by hand: indicators found, forms proposed, definitions and open questions. Used only with permission to use those files.
 
 ### 20.7 Load
 Simulate 50 collectors syncing batches of 20 submissions at once while an extraction job and a recalculation run. Targets: p95 sync under 1 s, no failed writes, recalculation lag under 2 minutes.
@@ -1531,17 +1734,19 @@ Each phase ends with a working, tested increment. AI work starts only once the e
 **Done when:** every route in the matrix passes; cross-project access returns 404 everywhere.
 
 ### Phase 2: Framework model (manual)
-- Migrations `0003`, `0004`. CRUD for levels, results, indicators, targets, periods, entity types, disaggregations, library.
-- Framework tree endpoint. Period generator from project dates and frequency.
+- Migrations `0003`, `0004`. CRUD for components, sites, levels, results, indicators, targets, periods, entity types, disaggregations, library.
+- Component restriction on memberships, enforced in `ProjectScope` and covered by the tenancy tests.
+- Framework tree endpoint (per component and for the whole project). Period generator from project dates and frequency.
 
-**Done when:** a full framework can be entered by hand through the API and read back as a tree.
+**Done when:** a project with two components, each with its own framework, can be entered by hand through the API and read back as trees; a member limited to one component can't see the other.
 
 ### Phase 3: Forms and data collection
 - Migration `0005`. Form schema models and validator; form versions with immutability; publish.
 - Submission validator; online submit; batch sync with idempotency; files with compression.
 - Entity resolution, aliases, duplicate detection, merge. Manual values. Collector bundle with ETag.
+- Registers: record list/detail, edits with revisions, `record_ref`/`entity_ref` fields and `submission_link`. Evidence attachments and verification gaps.
 
-**Done when:** a form can be published, filled offline (simulated), synced twice without duplicates, and linked to the right entities.
+**Done when:** a form can be published, filled offline (simulated), synced twice without duplicates, and linked to the right entities; a register (e.g. training sessions) can be edited with full history, and attendance surveys link to its records.
 
 ### Phase 4: Calculation engine and dashboard
 - Migrations `0006` and `0007`. (The AI review tables are created now because definitions reference them; they're first used in Phase 6.) Definition models, validator, compiler (all kinds, conditions, repeats, `require_in`, time aggregations, breakdowns), dialect layer.
@@ -1551,9 +1756,9 @@ Each phase ends with a working, tested increment. AI work starts only once the e
 **Done when:** all engine correctness cases in [20.2](#202-engine-correctness) pass, including the 5-indicator ENABEL benchmark.
 
 ### Phase 5: Document ingestion
-- IR format; Excel, Word, PDF, CSV parsers; OCR fallback; limits; parse job and summary.
+- IR format; LibreOffice conversion; Excel, Word, PowerPoint, PDF, CSV and image parsers; OCR / vision fallback; multi-file packages; limits; parse job and summary.
 
-**Done when:** golden IR snapshots pass for every sample framework.
+**Done when:** golden IR snapshots pass for every input type and shape listed in [10.1](#101-supported-inputs).
 
 ### Phase 6: AI extraction and review
 - LLM client (structured output, retries with feedback, logging, concurrency).
@@ -1561,7 +1766,7 @@ Each phase ends with a working, tested increment. AI work starts only once the e
 - Review endpoints (edit, accept, reject, regenerate, answer), validate, publish transaction.
 - AI evaluation harness.
 
-**Done when:** uploading each sample framework produces a change set that, after review, publishes forms and definitions that compute on test data; evaluation meets the agreed targets; no schema-invalid output ever reaches the review screen.
+**Done when:** uploading each sample framework produces a change set that, after review, publishes forms and definitions that compute on test data; a package with several frameworks produces one component per framework; evaluation meets the agreed targets, including the hand-built benchmark ([20.6](#206-ai-evaluation)); no schema-invalid output ever reaches the review screen.
 
 ### Phase 7: Qualitative analysis
 - Migration `0008` (qualitative tables). Selection with PII masking, coding, consolidation, assignment with verbatim-quote check, summaries, theme editing.
@@ -1571,8 +1776,9 @@ Each phase ends with a working, tested increment. AI work starts only once the e
 ### Phase 8: Revisions and reports
 - Revision diff job and change sets; new form versions from revisions.
 - Report builder (xlsx, csv); provisional vs. locked.
+- Generated indicator reference sheets and data dictionary.
 
-**Done when:** a revised framework produces correct update/create/retire suggestions; a locked-period report regenerates byte-identically.
+**Done when:** a revised framework produces correct update/create/retire suggestions; a locked-period report regenerates byte-identically; the generated documentation covers every published indicator and field.
 
 ### Phase 9: Hardening and operations
 - Backups, retention, integrity check, restore drill.
@@ -1581,6 +1787,12 @@ Each phase ends with a working, tested increment. AI work starts only once the e
 - Docker Compose, Caddy, deployment and runbook docs.
 
 **Done when:** a restore drill succeeds; load targets are met; the deployment guide brings up a fresh server end to end.
+
+### Phase 10: Public portal
+- Public page data per component, public and participant forms, published register listings, participant accounts and "my applications".
+- Rate limits, honeypot, size limits; `public: true` field filtering; staff review queue for public submissions.
+
+**Done when:** an anonymous visitor can see a component's listings and apply; a participant sees only their own applications; nothing indicator-related or `pii` is reachable from public routes (covered by the route walker).
 
 ---
 
@@ -1607,3 +1819,46 @@ Each phase ends with a working, tested increment. AI work starts only once the e
 4. **Launch languages** for the interface and AI output (e.g. English and Arabic first).
 5. **Sample frameworks** we have permission to use for tests and evaluation.
 6. **Front-end stack**, to be covered in its own plan; this API is designed to be used by any client.
+7. **Public portal scope.** Which public features ship first (applications only, or listings too).
+
+---
+
+## 25. Worked example: ENABEL as one project
+
+ENABEL is used here **only as an example** of the output the platform must reach. Nothing in the design is specific to it. ENABEL was built by hand: a developer read the frameworks and wrote the tables, forms, SQL views and screens. On this platform, the same result comes from uploading the files and reviewing the AI's draft.
+
+### 25.1 How ENABEL maps onto the model
+
+| ENABEL (built by hand) | On the platform (generated) |
+|---|---|
+| The company running the M&E work | `organization`, which has other projects too |
+| The ENABEL programme (EU-funded, implemented with Enabel) | one `project`, with Enabel and the EU as `project_party` rows |
+| Sahel Horan and Ramtha municipalities, each with its own framework | two `component`s; uploading a package with both frameworks proposes them automatically |
+| Each municipality's staff sees only its own records; a super admin switches | memberships limited with `membership_component`; project admins see both |
+| Sahel Horan: 7 forms, 20 indicators | AI draft from the Sahel Horan framework and forms workbook: forms and indicators in that component |
+| Ramtha: 17 forms, 18 indicators | AI draft from the Ramtha framework and forms/calculations workbooks |
+| Breakdowns by sex, age, refugee status and disability | `disaggregation` rows from the framework text; `person` `entity_type` with those attributes |
+| One national ID = one person | identity field `national_id` → `identity_hash` |
+| Sessions, exhibitions and registrations, advisory sessions, production initiatives, linkage requests | **register** forms; attendance and registrations are surveys linked with `record_ref` |
+| The five-section follow-up survey for phones in the field | a survey form with `group`s, offline-capable |
+| Indicators counted in hand-written SQL views (distinct people vs. rows) | `indicator_definition`s with explicit `unit`, computed by the generic engine |
+| 5 Sahel Horan indicators with no form, entered on a manual screen | indicators of kind `manual`, entered as `manual_value`s |
+| 9 Ramtha indicators waiting on a definition the M&E lead must decide | blocking `open_question`s; those indicators show `not_computable` with the reason |
+| Dashboard explaining why a figure is missing | `indicator_value.status` + `reason` |
+| Evidence files (photos compressed on upload) | `evidence` + `file`, with image compression and verification gaps |
+| Quarterly return for the donor | `report` for a locked quarterly `reporting_period` |
+| Public sites per municipality (trainings, markets, advisory, "my applications") | the public portal per component (`public_slug`), public forms and listings, `participant` role |
+| Indicator and data dictionary documents written by hand | generated indicator reference sheets and data dictionary |
+| English/Arabic with right-to-left | project `languages` = `["en","ar"]`; labels translated in every schema |
+
+### 25.2 The same platform, a different organization
+
+To show it isn't a template: a consulting firm with three projects, none like ENABEL.
+
+| Project | Framework input | What the AI produces |
+|---|---|---|
+| Maternal health in two countries | a donor-style performance monitoring plan in Word plus indicator reference sheets as PDFs | two components (one per country); entity types `health_facility` and `household`; breakdowns by district and facility type; ratio indicators ("% of births attended by skilled staff") with `latest` aggregation |
+| Rural road rehabilitation | a 4×4 logframe as a scanned PDF | one component; entity type `road_segment`; `sum` of kilometres rehabilitated; `milestone` indicators ("maintenance committee established"); no public portal |
+| Youth employment | a Theory of Change in PowerPoint plus an existing questionnaire as `.xls` | the questionnaire converted to a survey; a register of training cohorts; ratio "% employed 6 months after training" using `require_in`; a public application form for new cohorts |
+
+Same tables, same engine, same screens. Only the rows differ.
