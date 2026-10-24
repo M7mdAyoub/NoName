@@ -63,7 +63,20 @@ bash scripts/serve_vllm.sh            # on the GPU machine: installs vLLM, downl
 then in the app's `.env` set `LLM_BASE_URL=http://<gpu-machine>:8001/v1` (or `http://localhost:8001/v1`
 on the same machine), check it with `python scripts/check_llm.py`, and restart the app.
 
-## Checks
+## Status: what is tested and what is not
+| Area | Status |
+|---|---|
+| Backend (upload, extraction, review, forms, engine, dashboard) | Tested: `scripts/check.py`, 168 tests |
+| Arabic frontend | Tested: build + 56 tests, and the whole flow by hand in a browser against the API |
+| Built-in rules (no model) | Tested end to end on the sample files |
+| `scripts/setup.py` on a fresh clone | **Not tested yet** as a whole (each step was). If a step fails, run it by hand: see the steps in the script's header |
+| Qwen3.5 through vLLM | **Not tested with the app yet** (no GPU here). `scripts/check_llm.py` was tested against a stand-in server; run it first on the real one |
+| Form builder edge cases | The last review round was stopped early: its fixes are in and pass the tests, but were not re-checked by the independent reviewers. If a builder edit behaves oddly (option values, identifier question, min/max), report it |
+
+Known limits: answers are counted over all time (no reporting periods), nothing can be unpublished
+(to start over, stop the app and delete `data/app.db*`), and the frontend's `dist/` is not in Git
+(`setup.py` or `npm run build` makes it).
+
 ```bash
 python scripts/check.py
 ```
